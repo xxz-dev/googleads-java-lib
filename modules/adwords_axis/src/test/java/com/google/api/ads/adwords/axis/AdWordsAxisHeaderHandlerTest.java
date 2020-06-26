@@ -14,56 +14,45 @@
 
 package com.google.api.ads.adwords.axis;
 
-import static junit.framework.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Matchers.eq;
+import static org.junit.Assert.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.google.api.ads.adwords.lib.client.AdWordsServiceDescriptor;
-import com.google.api.ads.adwords.lib.client.AdWordsServiceDescriptor.AdWordsSubProduct;
 import com.google.api.ads.adwords.lib.client.AdWordsSession;
 import com.google.api.ads.adwords.lib.conf.AdWordsApiConfiguration;
-import com.google.api.ads.common.lib.client.HeaderHandler;
+import com.google.api.ads.common.lib.conf.AdsLibConfiguration;
 import com.google.api.ads.common.lib.soap.AuthorizationHeaderHandler;
 import com.google.api.ads.common.lib.soap.axis.AxisHandler;
 import com.google.api.ads.common.lib.soap.axis.AxisSoapHeaderFactory;
 import com.google.api.ads.common.lib.useragent.UserAgentCombiner;
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.common.collect.Maps;
-
+import java.util.List;
+import java.util.Map;
 import org.apache.axis.client.Stub;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-
 /**
  * Tests for the {@link AdWordsAxisHeaderHandler} class.
- *
- * @author Josh Radcliff
  */
-@RunWith(Parameterized.class)
+@RunWith(JUnit4.class)
 public class AdWordsAxisHeaderHandlerTest {
 
   private AdWordsAxisHeaderHandler headerHandler;
 
   private AdWordsSession adWordsSession;
-
-  private final AdWordsSubProduct subProduct;
 
   @Mock
   private AxisHandler soapClientHandler;
@@ -75,6 +64,8 @@ public class AdWordsAxisHeaderHandlerTest {
   @Mock
   private AdWordsApiConfiguration adWordsApiConfiguration;
   @Mock
+  private AdsLibConfiguration adsLibConfiguration;
+  @Mock
   private AuthorizationHeaderHandler authorizationHeaderHandler;
   @Mock
   private UserAgentCombiner userAgentCombiner;
@@ -83,52 +74,17 @@ public class AdWordsAxisHeaderHandlerTest {
   @Mock
   private AdWordsServiceDescriptor adWordsServiceDescriptor;
 
-  /**
-   * Arguments for this constructor are provided by the {@link #data()} method
-   *
-   * @param subProduct the sub product for the service
-   */
-  public AdWordsAxisHeaderHandlerTest(AdWordsSubProduct subProduct) {
-    this.subProduct = subProduct;
-  }
-
-  /**
-   * Returns constructor args for each instance of the test
-   *
-   * @return a list of constructor args where the first element is a service 
-   *         interface class and the second element is a boolean indicating if
-   *         it is a standard (non-express) interface
-   */
-  @Parameters
-  public static Collection<Object[]> data() {
-    Collection<Object[]> parameters = new ArrayList<Object[]>();
-
-    parameters.add(new Object[] {AdWordsSubProduct.DEFAULT});
-    parameters.add(new Object[] {AdWordsSubProduct.EXPRESS});
-
-    return parameters;
-  }
-
   @Before
   public void setUp() throws Exception {
     MockitoAnnotations.initMocks(this);
-  
-    when(adWordsServiceDescriptor.getSubProduct()).thenReturn(subProduct);
-  
-    Map<AdWordsSubProduct, HeaderHandler<AdWordsSession, AdWordsServiceDescriptor>> handlerMap =
-        Maps.newHashMap();
-    handlerMap.put(AdWordsSubProduct.DEFAULT,
-        new HeaderHandler.NoOpHeaderHandler<AdWordsSession, AdWordsServiceDescriptor>());
-    handlerMap.put(AdWordsSubProduct.EXPRESS,
-        new AdWordsAxisExpressHeaderHandler(soapClientHandler));
-    
+
     headerHandler = new AdWordsAxisHeaderHandler(soapClientHandler,
         adWordsApiConfiguration,
+        adsLibConfiguration,
         authorizationHeaderHandler,
         userAgentCombiner,
-        handlerMap,
         soapHeaderFactory);
-  
+
     adWordsSession = new AdWordsSession.Builder()
         .withClientCustomerId("123-456-7890")
         .withDeveloperToken("DEV_TOKEN")
@@ -136,9 +92,7 @@ public class AdWordsAxisHeaderHandlerTest {
         .withUserAgent("Test User")
         .withOAuth2Credential(oAuth2Credential)
         .build();
-  
-    adWordsSession.setExpressBusinessId(123456789L);
-  
+
     adWordsSession.setValidateOnly(true);
   }
 
@@ -155,10 +109,6 @@ public class AdWordsAxisHeaderHandlerTest {
     expectedHeaders.put("developerToken", adWordsSession.getDeveloperToken());
     expectedHeaders.put("validateOnly", adWordsSession.isValidateOnly());
     expectedHeaders.put("userAgent", "libSig");
-    if (subProduct == AdWordsSubProduct.EXPRESS) {
-      expectedHeaders.put(AdWordsAxisExpressHeaderHandler.EXPRESS_BUSINESS_ID_LOCAL_PART,
-          adWordsSession.getExpressBusinessId());
-    }
 
     // Configure mocks to avoid relying on the underlying details of soapClientHandler.
     doNothing().when(soapClientHandler)
@@ -193,11 +143,6 @@ public class AdWordsAxisHeaderHandlerTest {
       Object value = capturedValues.get(i);
       Object expectedValue = expectedHeaders.get(name);
       assertEquals("Captured value for " + name + " is incorrect", expectedValue, value);
-    }
-
-    if (subProduct != AdWordsSubProduct.EXPRESS) {
-      assertFalse("Express business ID found in header for non-express subproduct",
-          capturedNames.contains(AdWordsAxisExpressHeaderHandler.EXPRESS_BUSINESS_ID_LOCAL_PART));
     }
   }
 

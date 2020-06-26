@@ -18,22 +18,19 @@ import com.google.api.ads.adwords.lib.client.AdWordsServiceClient;
 import com.google.api.ads.adwords.lib.client.AdWordsServiceDescriptor;
 import com.google.api.ads.adwords.lib.client.AdWordsSession;
 import com.google.api.ads.common.lib.conf.AdsLibConfiguration;
-import com.google.api.ads.common.lib.exception.ServiceException;
 import com.google.api.ads.common.lib.factory.FactoryModule.AdsServiceClientFactoryInterface;
 import com.google.api.ads.common.lib.factory.FactoryModule.AdsServiceDescriptorFactoryInterface;
 import com.google.api.ads.common.lib.factory.helper.AdsServiceClientFactoryHelper;
 import com.google.api.ads.common.lib.factory.helper.BaseAdsServiceClientFactoryHelper;
 import com.google.api.ads.common.lib.soap.SoapClientHandlerInterface;
-import com.google.common.base.Strings;
-import com.google.inject.Inject;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import javax.inject.Inject;
+
 /**
  * Factory helper for AdWords.
- *
- * @author Adam Rogal
  */
 public class AdWordsServiceClientFactoryHelper extends
     BaseAdsServiceClientFactoryHelper<AdWordsServiceClient,
@@ -41,7 +38,6 @@ public class AdWordsServiceClientFactoryHelper extends
                                       AdWordsServiceDescriptor> {
 
   private static final Pattern VERSION_PATTERN = Pattern.compile("^.*(v[0-9][^\\.]*).*$");
-  private static final String FINAL_CLIENT_LOGIN_VERSION = "v201309";
 
   private final AdsLibConfiguration adsLibConfiguration;
 
@@ -53,15 +49,17 @@ public class AdWordsServiceClientFactoryHelper extends
    * @param soapClientHandler the SOAP client handler
    * @param adsLibConfiguration the lib configuration
    */
-  @SuppressWarnings("unchecked") // All generics of SoapClientHandlerInterface
-                                 // extend Object.
+  @SuppressWarnings("unchecked") /* See comments on soapClientHandler argument. */
   @Inject
   public AdWordsServiceClientFactoryHelper(
       AdsServiceClientFactoryInterface<AdWordsServiceClient,
                                        AdWordsSession,
                                        AdWordsServiceDescriptor> adsServiceClientFactory,
       AdsServiceDescriptorFactoryInterface<AdWordsServiceDescriptor> adsServiceDescriptorFactory,
-      @SuppressWarnings({"rawtypes", "unchecked"})  /* Due to problem with guice binding */
+      @SuppressWarnings("rawtypes") /* Guice binding for SoapClientHandlerInterface does not include
+                                     * the type argument T because it is bound in the SOAP
+                                     * toolkit-agnostic configuration module. Therefore, must use
+                                     * the raw type here. */
       SoapClientHandlerInterface soapClientHandler,
       AdsLibConfiguration adsLibConfiguration) {
     super(adsServiceClientFactory, adsServiceDescriptorFactory, soapClientHandler);
@@ -71,26 +69,13 @@ public class AdWordsServiceClientFactoryHelper extends
   /**
    * @see AdsServiceClientFactoryHelper#determineVersion(Class)
    */
+  @Override
   public String determineVersion(Class<?> interfaceClass) {
     Matcher m = VERSION_PATTERN.matcher(interfaceClass.getPackage().getName());
     if (m.matches()) {
       return m.group(1);
     } else {
       return adsLibConfiguration.getDuckTypedVersion();
-    }
-  }
-
-
-  /**
-   * @see AdsServiceClientFactoryHelper#checkServiceClientPreconditions(AdsSession, Class)
-   */
-  public void checkServiceClientPreconditions(AdWordsSession adWordsSession,
-      Class<?> interfaceClass) throws ServiceException {
-    String version = determineVersion(interfaceClass);
-    if (!Strings.isNullOrEmpty(adWordsSession.getClientLoginToken())
-        && version.compareTo(FINAL_CLIENT_LOGIN_VERSION) > 0) {
-      throw new ServiceException(String.format("ClientLogin is not supported in version %s."
-          + " Please upgrade to OAuth2.", version));
     }
   }
 }

@@ -14,26 +14,19 @@
 
 package com.google.api.ads.adwords.lib.conf;
 
-import com.google.api.ads.adwords.lib.client.AdWordsServiceDescriptor.AdWordsSubProduct;
 import com.google.api.ads.common.lib.conf.AdsApiConfiguration;
 import com.google.common.collect.Lists;
-import com.google.inject.Inject;
 import com.google.inject.name.Named;
-
+import javax.inject.Inject;
 import org.apache.commons.configuration.Configuration;
 
-/**
- * Configuration information for AdWords library.
- *
- * @author Adam Rogal
- */
+/** Configuration information for AdWords library. */
 public class AdWordsApiConfiguration extends AdsApiConfiguration {
 
   public static final String NAMESPACE_PREFIX_KEY = "api.adwords.namespace.prefix";
+  private static final String KEY_PREFIX = "api.adwords";
 
   /**
-   * Constructor.
-   *
    * @param config the backing configuration
    */
   @Inject
@@ -41,17 +34,12 @@ public class AdWordsApiConfiguration extends AdsApiConfiguration {
     super(config);
   }
 
-  /**
-   * @see AdsApiConfiguration#getNamespacePrefix()
-   */
   @Override
   public String getNamespacePrefix() {
     return getString(NAMESPACE_PREFIX_KEY);
   }
 
-  /**
-   * Gets the service URL group for the service and version.
-   */
+  /** Gets the service URL group for the service and version. */
   public String getServiceUrlGroup(String version, String service) {
     String[] groups = config.getStringArray("api.adwords.version." + version + ".groups");
     for (String group : groups) {
@@ -63,15 +51,30 @@ public class AdWordsApiConfiguration extends AdsApiConfiguration {
     }
     throw new NullPointerException("No group found for service: " + version + "." + service);
   }
-  
-  /**
-   * Gets the sub product for the service and version. 
-   */
-  public AdWordsSubProduct getServiceSubProduct(String version, String service) {
-    String subProductName = config.getString("api.adwords.version." + version + "."
-        + getServiceUrlGroup(version, service) + ".subproduct");
-    return subProductName != null
-        ? Enum.valueOf(AdWordsSubProduct.class, subProductName.toUpperCase())
-        : AdWordsSubProduct.DEFAULT;
+
+  @Override
+  public String getRequestIdXPath() {
+    return config.getString(String.format("%s.%s", KEY_PREFIX, REQUEST_ID_XPATH_POSTFIX));
+  }
+
+  @Override
+  public String[] getSensitiveXPaths() {
+    return config.getStringArray(String.format("%s.%s", KEY_PREFIX, SENSITIVE_XPATHS_POSTFIX));
+  }
+
+  @Override
+  public String getRequestContextXPath() {
+    return config.getString(String.format("%s.%s", KEY_PREFIX, REQUEST_CONTEXT_XPATH_POSTFIX));
+  }
+
+  @Override
+  public String getResponseTimeXPath() {
+    return config.getString(String.format("%s.%s", KEY_PREFIX, RESPONSE_TIME_XPATH_POSTFIX));
+  }
+
+  @Override
+  public String getResponseOperationsCountXPath() {
+    return config.getString(
+        String.format("%s.%s", KEY_PREFIX, RESPONSE_OPERATIONS_COUNT_XPATH_POSTFIX));
   }
 }

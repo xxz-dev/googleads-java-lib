@@ -15,20 +15,24 @@
 package com.google.api.ads.adwords.lib.utils;
 
 import java.io.InputStream;
+import java.nio.charset.Charset;
 
 /**
  * Holder class for http status and response body.
- *
- * @author Kevin Winter
  */
 public class RawReportDownloadResponse {
 
   private final int httpStatus;
   private final InputStream inputStream;
+  private final Charset charset;
+  private final String downloadFormat;
 
-  public RawReportDownloadResponse(int httpStatus, InputStream inputStream) {
+  public RawReportDownloadResponse(int httpStatus, InputStream inputStream, Charset charset,
+      String downloadFormat) {
     this.httpStatus = httpStatus;
     this.inputStream = inputStream;
+    this.charset = charset;
+    this.downloadFormat = downloadFormat;
   }
 
   public int getHttpStatus() {
@@ -37,5 +41,13 @@ public class RawReportDownloadResponse {
 
   public InputStream getInputStream() {
     return inputStream;
+  }
+  
+  public Charset getCharset() {
+    return charset;
+  }
+  
+  public String getDownloadFormat() {
+    return downloadFormat;
   }
 }

@@ -15,15 +15,14 @@
 package com.google.api.ads.common.lib.soap;
 
 import static org.junit.Assert.assertEquals;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Matchers.same;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.google.api.ads.common.lib.auth.AuthorizationHeaderProvider;
 import com.google.api.ads.common.lib.client.AdsSession;
-import com.google.api.ads.common.lib.client.Endpoint;
-
+import java.util.Map;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -32,12 +31,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import java.util.Map;
-
 /**
  * Tests for {@link AuthorizationHeaderHandler}.
- *
- * @author Adam Rogal
  */
 @RunWith(JUnit4.class)
 public class AuthorizationHeaderHandlerTest {
@@ -62,17 +57,7 @@ public class AuthorizationHeaderHandlerTest {
     String authorizationHeaderValue = "IAmAuthorized";
     final String endpoint = "endpoint";
     Object soapClient = new Object();
-    AdsSession adsSession = new AdsSession() {
-
-      public boolean isEnvironment(Endpoint environment) {
-        return false;
-      }
-
-
-      public String getEndpoint() {
-        return endpoint;
-      }
-    };
+    AdsSession adsSession = () -> endpoint;
     @SuppressWarnings("rawtypes")
     ArgumentCaptor<Map> headers = ArgumentCaptor.forClass(Map.class);
 

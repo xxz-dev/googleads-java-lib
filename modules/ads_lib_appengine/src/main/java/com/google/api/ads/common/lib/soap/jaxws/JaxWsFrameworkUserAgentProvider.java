@@ -18,11 +18,10 @@ import com.google.api.ads.common.lib.useragent.FrameworkUserAgentProvider;
 
 /**
  * Provides the JAX-WS user agent.
- *
- * @author Adam Rogal
  */
 public class JaxWsFrameworkUserAgentProvider implements FrameworkUserAgentProvider {
 
+  @Override
   public String getUserAgent() {
     return "JAX-WS/Unknown";
   }

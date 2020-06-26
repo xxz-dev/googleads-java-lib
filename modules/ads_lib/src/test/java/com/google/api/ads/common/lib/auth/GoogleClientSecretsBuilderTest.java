@@ -16,17 +16,17 @@ package com.google.api.ads.common.lib.auth;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.fail;
 import static org.mockito.Mockito.when;
 
 import com.google.api.ads.common.lib.auth.GoogleClientSecretsBuilder.GoogleClientSecretsForApiBuilder;
 import com.google.api.ads.common.lib.conf.ConfigurationHelper;
 import com.google.api.ads.common.lib.exception.ValidationException;
 import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets;
-
 import org.apache.commons.configuration.PropertiesConfiguration;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mock;
@@ -34,14 +34,13 @@ import org.mockito.MockitoAnnotations;
 
 /**
  * Tests for {@link OfflineCredentials}.
- *
- * @author Adam Rogal
  */
 @RunWith(JUnit4.class)
 public class GoogleClientSecretsBuilderTest {
 
-  @Mock ConfigurationHelper configurationHelper;
-  @Mock OAuth2Helper oAuth2Helper;
+  @Mock private ConfigurationHelper configurationHelper;
+
+  @Rule public ExpectedException thrown = ExpectedException.none();
 
   @Before
   public void setUp() {
@@ -54,16 +53,16 @@ public class GoogleClientSecretsBuilderTest {
   @Test
   public void testGoogleSecretsReadPropertiesFromConfiguration() throws ValidationException {
     PropertiesConfiguration config = new PropertiesConfiguration();
-    config.setProperty("api.dfp.clientId", "clientId");
-    config.setProperty("api.dfp.clientSecret", "clientSecret");
+    config.setProperty("api.admanager.clientId", "clientId");
+    config.setProperty("api.admanager.clientSecret", "clientSecret");
 
     GoogleClientSecrets googleClientSecrets = new GoogleClientSecretsBuilder()
-        .forApi(GoogleClientSecretsBuilder.Api.DFP)
+        .forApi(GoogleClientSecretsBuilder.Api.AD_MANAGER)
         .from(config)
         .build();
 
-    assertEquals(googleClientSecrets.getInstalled().getClientId(), "clientId");
-    assertEquals(googleClientSecrets.getInstalled().getClientSecret(), "clientSecret");
+    assertEquals("clientId", googleClientSecrets.getInstalled().getClientId());
+    assertEquals("clientSecret", googleClientSecrets.getInstalled().getClientSecret());
   }
 
   /**
@@ -73,30 +72,31 @@ public class GoogleClientSecretsBuilderTest {
   public void testGoogleSecretsReadPropertiesFromConfiguration_properPrefix()
       throws ValidationException {
     PropertiesConfiguration config = new PropertiesConfiguration();
-    config.setProperty("api.dfp.clientId", "clientIdDfp");
-    config.setProperty("api.dfp.clientSecret", "clientSecretDfp");
+    config.setProperty("api.admanager.clientId", "clientIdDfp");
+    config.setProperty("api.admanager.clientSecret", "clientSecretDfp");
     config.setProperty("api.adwords.clientId", "clientIdAdWords");
     config.setProperty("api.adwords.clientSecret", "clientSecretAdWords");
 
     GoogleClientSecrets googleClientSecrets = new GoogleClientSecretsBuilder()
-        .forApi(GoogleClientSecretsBuilder.Api.DFP)
+        .forApi(GoogleClientSecretsBuilder.Api.AD_MANAGER)
         .from(config)
         .build();
 
-    assertEquals(googleClientSecrets.getInstalled().getClientId(), "clientIdDfp");
-    assertEquals(googleClientSecrets.getInstalled().getClientSecret(), "clientSecretDfp");
+    assertEquals("clientIdDfp", googleClientSecrets.getInstalled().getClientId());
+    assertEquals("clientSecretDfp", googleClientSecrets.getInstalled().getClientSecret());
   }
 
   /**
    * Tests that the builder correctly fails on a bad configuration.
    */
-  @Test(expected = ValidationException.class)
+  @Test
   public void testGoogleSecretsReadPropertiesFromConfiguration_missingClientId() throws Exception {
     PropertiesConfiguration config = new PropertiesConfiguration();
-    config.setProperty("api.dfp.clientSecret", "clientSecret");
+    config.setProperty("api.admanager.clientSecret", "clientSecret");
 
-    GoogleClientSecrets googleClientSecrets = new GoogleClientSecretsBuilder()
-        .forApi(GoogleClientSecretsBuilder.Api.DFP)
+    thrown.expect(ValidationException.class);
+    new GoogleClientSecretsBuilder()
+        .forApi(GoogleClientSecretsBuilder.Api.AD_MANAGER)
         .from(config)
         .build();
   }
@@ -104,14 +104,15 @@ public class GoogleClientSecretsBuilderTest {
   /**
    * Tests that the builder correctly fails on a bad configuration.
    */
-  @Test(expected = ValidationException.class)
+  @Test
   public void testGoogleSecretsReadPropertiesFromConfiguration_missingClientSecret()
       throws Exception {
     PropertiesConfiguration config = new PropertiesConfiguration();
-    config.setProperty("api.dfp.clientId", "clientId");
+    config.setProperty("api.admanager.clientId", "clientId");
 
-    GoogleClientSecrets googleClientSecrets = new GoogleClientSecretsBuilder()
-        .forApi(GoogleClientSecretsBuilder.Api.DFP)
+    thrown.expect(ValidationException.class);
+    new GoogleClientSecretsBuilder()
+        .forApi(GoogleClientSecretsBuilder.Api.AD_MANAGER)
         .from(config)
         .build();
   }
@@ -122,18 +123,18 @@ public class GoogleClientSecretsBuilderTest {
   @Test
   public void testGoogleSecretsReadPropertiesFromFile() throws Exception {
     PropertiesConfiguration config = new PropertiesConfiguration();
-    config.setProperty("api.dfp.clientId", "clientId");
-    config.setProperty("api.dfp.clientSecret", "clientSecret");
+    config.setProperty("api.admanager.clientId", "clientId");
+    config.setProperty("api.admanager.clientSecret", "clientSecret");
 
     when(configurationHelper.fromFile("path")).thenReturn(config);
 
     GoogleClientSecretsForApiBuilder builder = new GoogleClientSecretsForApiBuilder(
-        configurationHelper, GoogleClientSecretsBuilder.Api.DFP);
+        configurationHelper, GoogleClientSecretsBuilder.Api.AD_MANAGER);
 
     GoogleClientSecrets googleClientSecrets = builder.fromFile("path").build();
 
-    assertEquals(googleClientSecrets.getInstalled().getClientId(), "clientId");
-    assertEquals(googleClientSecrets.getInstalled().getClientSecret(), "clientSecret");
+    assertEquals("clientId", googleClientSecrets.getInstalled().getClientId());
+    assertEquals("clientSecret", googleClientSecrets.getInstalled().getClientSecret());
   }
 
   /**
@@ -142,22 +143,20 @@ public class GoogleClientSecretsBuilderTest {
   @Test
   public void testReadPropertiesFromFile_clientIdTokenBadWithFilePath() throws Exception {
     PropertiesConfiguration config = new PropertiesConfiguration();
-    config.setProperty("api.dfp.clientSecret", "clientSecret");
-    config.setProperty("api.dfp.refreshToken", "refreshToken");
+    config.setProperty("api.admanager.clientSecret", "clientSecret");
+    config.setProperty("api.admanager.refreshToken", "refreshToken");
 
     when(configurationHelper.fromFile("/home/user/path")).thenReturn(config);
 
     GoogleClientSecretsForApiBuilder builder = new GoogleClientSecretsForApiBuilder(
-        configurationHelper, GoogleClientSecretsBuilder.Api.DFP);
+        configurationHelper, GoogleClientSecretsBuilder.Api.AD_MANAGER);
 
-    try {
-      builder.fromFile("/home/user/path").build();
-      fail("Validation exception should have been thrown");
-    } catch (ValidationException e) {
-      assertEquals("Client ID must be set as api.dfp.clientId in /home/user/path."
-          + "\nIf you do not have a client ID or secret, please create one in the API "
-          + "console: https://cloud.google.com/console", e.getMessage());
-    }
+    thrown.expect(ValidationException.class);
+    thrown.expectMessage(
+        "Client ID must be set as api.admanager.clientId in /home/user/path."
+            + "\nIf you do not have a client ID or secret, please create one in the API "
+            + "console: https://console.developers.google.com");
+    builder.fromFile("/home/user/path").build();
   }
 
   /**
@@ -166,20 +165,17 @@ public class GoogleClientSecretsBuilderTest {
   @Test
   public void testReadPropertiesFromFile_clientIdNoFilePath() throws Exception {
     PropertiesConfiguration config = new PropertiesConfiguration();
-    config.setProperty("api.dfp.clientSecret", "clientSecret");
-    config.setProperty("api.dfp.refreshToken", "refreshToken");
+    config.setProperty("api.admanager.clientSecret", "clientSecret");
+    config.setProperty("api.admanager.refreshToken", "refreshToken");
 
     GoogleClientSecretsForApiBuilder builder = new GoogleClientSecretsForApiBuilder(
-        configurationHelper, GoogleClientSecretsBuilder.Api.DFP);
+        configurationHelper, GoogleClientSecretsBuilder.Api.AD_MANAGER);
 
-    try {
-      builder.from(config).build();
-      fail("Validation exception should have been thrown");
-    } catch (ValidationException e) {
-      assertEquals("Client ID must be set."
-          + "\nIf you do not have a client ID or secret, please create one in the API "
-          + "console: https://cloud.google.com/console", e.getMessage());
-    }
+    thrown.expect(ValidationException.class);
+    thrown.expectMessage("Client ID must be set."
+        + "\nIf you do not have a client ID or secret, please create one in the API "
+        + "console: https://console.developers.google.com");
+    builder.from(config).build();
   }
 
   /**
@@ -188,22 +184,20 @@ public class GoogleClientSecretsBuilderTest {
   @Test
   public void testReadPropertiesFromFile_clientSecretTokenBadWithFilePath() throws Exception {
     PropertiesConfiguration config = new PropertiesConfiguration();
-    config.setProperty("api.dfp.clientId", "clientId");
-    config.setProperty("api.dfp.refreshToken", "refreshToken");
+    config.setProperty("api.admanager.clientId", "clientId");
+    config.setProperty("api.admanager.refreshToken", "refreshToken");
 
     when(configurationHelper.fromFile("/home/user/path")).thenReturn(config);
 
     GoogleClientSecretsForApiBuilder builder = new GoogleClientSecretsForApiBuilder(
-        configurationHelper, GoogleClientSecretsBuilder.Api.DFP);
+        configurationHelper, GoogleClientSecretsBuilder.Api.AD_MANAGER);
 
-    try {
-      builder.fromFile("/home/user/path").build();
-      fail("Validation exception should have been thrown");
-    } catch (ValidationException e) {
-      assertEquals("Client secret must be set as api.dfp.clientSecret in /home/user/path."
-          + "\nIf you do not have a client ID or secret, please create one in the API "
-          + "console: https://cloud.google.com/console", e.getMessage());
-    }
+    thrown.expect(ValidationException.class);
+    thrown.expectMessage(
+        "Client secret must be set as api.admanager.clientSecret in /home/user/path."
+            + "\nIf you do not have a client ID or secret, please create one in the API "
+            + "console: https://console.developers.google.com");
+    builder.fromFile("/home/user/path").build();
   }
 
   /**
@@ -212,20 +206,17 @@ public class GoogleClientSecretsBuilderTest {
   @Test
   public void testReadPropertiesFromFile_clientSecretNoFilePath() throws Exception {
     PropertiesConfiguration config = new PropertiesConfiguration();
-    config.setProperty("api.dfp.clientId", "clientId");
-    config.setProperty("api.dfp.refreshToken", "refreshToken");
+    config.setProperty("api.admanager.clientId", "clientId");
+    config.setProperty("api.admanager.refreshToken", "refreshToken");
 
     GoogleClientSecretsForApiBuilder builder = new GoogleClientSecretsForApiBuilder(
-        configurationHelper, GoogleClientSecretsBuilder.Api.DFP);
+        configurationHelper, GoogleClientSecretsBuilder.Api.AD_MANAGER);
 
-    try {
-      builder.from(config).build();
-      fail("Validation exception should have been thrown");
-    } catch (ValidationException e) {
-      assertEquals("Client secret must be set."
-          + "\nIf you do not have a client ID or secret, please create one in the API "
-          + "console: https://cloud.google.com/console", e.getMessage());
-    }
+    thrown.expect(ValidationException.class);
+    thrown.expectMessage("Client secret must be set."
+        + "\nIf you do not have a client ID or secret, please create one in the API "
+        + "console: https://console.developers.google.com");
+    builder.from(config).build();
   }
 
   /**
@@ -234,13 +225,13 @@ public class GoogleClientSecretsBuilderTest {
   @Test
   public void testBuilder() throws Exception {
     GoogleClientSecrets clientSecrets = new GoogleClientSecretsBuilder()
-        .forApi(GoogleClientSecretsBuilder.Api.DFP)
+        .forApi(GoogleClientSecretsBuilder.Api.AD_MANAGER)
         .withClientSecrets("clientId", "clientSecret")
         .build();
 
     assertNotNull(clientSecrets.getDetails());
-    assertEquals(clientSecrets.getDetails().getClientId(), "clientId");
-    assertEquals(clientSecrets.getDetails().getClientSecret(), "clientSecret");
+    assertEquals("clientId", clientSecrets.getDetails().getClientId());
+    assertEquals("clientSecret", clientSecrets.getDetails().getClientSecret());
   }
 
   /**
@@ -249,17 +240,14 @@ public class GoogleClientSecretsBuilderTest {
    */
   @Test
   public void testBuilder_defaultClientIdAndSecret() throws Exception {
-    try {
-      GoogleClientSecrets clientSecrets = new GoogleClientSecretsBuilder()
-          .forApi(GoogleClientSecretsBuilder.Api.DFP)
-          .withClientSecrets("INSERT_CLIENT_ID_HERE", "INSERT_CLIENT_SECRET_HERE")
-          .build();
-      fail("Validation exception should have been thrown");
-    } catch (ValidationException e) {
-      assertEquals("Client ID must be set."
-          + "\nIf you do not have a client ID or secret, please create one in the API "
-          + "console: https://cloud.google.com/console", e.getMessage());
-    }
+    thrown.expect(ValidationException.class);
+    thrown.expectMessage("Client ID must be set."
+        + "\nIf you do not have a client ID or secret, please create one in the API "
+        + "console: https://console.developers.google.com");
+    new GoogleClientSecretsBuilder()
+        .forApi(GoogleClientSecretsBuilder.Api.AD_MANAGER)
+        .withClientSecrets("INSERT_CLIENT_ID_HERE", "INSERT_CLIENT_SECRET_HERE")
+        .build();
   }
 
   /**
@@ -269,19 +257,16 @@ public class GoogleClientSecretsBuilderTest {
   @Test
   public void testReadPropertiesFromFile_defaultClientId() throws Exception {
     PropertiesConfiguration config = new PropertiesConfiguration();
-    config.setProperty("api.dfp.clientId", "INSERT_CLIENT_ID_HERE");
+    config.setProperty("api.admanager.clientId", "INSERT_CLIENT_ID_HERE");
 
     GoogleClientSecretsForApiBuilder builder = new GoogleClientSecretsForApiBuilder(
-        configurationHelper, GoogleClientSecretsBuilder.Api.DFP);
+        configurationHelper, GoogleClientSecretsBuilder.Api.AD_MANAGER);
 
-    try {
-      builder.from(config).build();
-      fail("Validation exception should have been thrown");
-    } catch (ValidationException e) {
-      assertEquals("Client ID must be set."
-          + "\nIf you do not have a client ID or secret, please create one in the API "
-          + "console: https://cloud.google.com/console", e.getMessage());
-    }
+    thrown.expect(ValidationException.class);
+    thrown.expectMessage("Client ID must be set."
+        + "\nIf you do not have a client ID or secret, please create one in the API "
+        + "console: https://console.developers.google.com");
+    builder.from(config).build();
   }
 
   /**
@@ -291,19 +276,16 @@ public class GoogleClientSecretsBuilderTest {
   @Test
   public void testReadPropertiesFromFile_defaultClientSecret() throws Exception {
     PropertiesConfiguration config = new PropertiesConfiguration();
-    config.setProperty("api.dfp.clientId", "clientId");
-    config.setProperty("api.dfp.clientId", "INSERT_CLIENT_SECRET_HERE");
+    config.setProperty("api.admanager.clientId", "clientId");
+    config.setProperty("api.admanager.clientId", "INSERT_CLIENT_SECRET_HERE");
 
     GoogleClientSecretsForApiBuilder builder = new GoogleClientSecretsForApiBuilder(
-        configurationHelper, GoogleClientSecretsBuilder.Api.DFP);
+        configurationHelper, GoogleClientSecretsBuilder.Api.AD_MANAGER);
 
-    try {
-      builder.from(config).build();
-      fail("Validation exception should have been thrown");
-    } catch (ValidationException e) {
-      assertEquals("Client secret must be set."
-          + "\nIf you do not have a client ID or secret, please create one in the API "
-          + "console: https://cloud.google.com/console", e.getMessage());
-    }
+    thrown.expect(ValidationException.class);
+    thrown.expectMessage("Client secret must be set."
+        + "\nIf you do not have a client ID or secret, please create one in the API "
+        + "console: https://console.developers.google.com");
+    builder.from(config).build();
   }
 }

@@ -16,11 +16,10 @@ package com.google.api.ads.common.lib.useragent;
 
 /**
  * Gets the runtime user agent.
- *
- * @author Adam Rogal
  */
 public class RuntimeUserAgentProvider implements UserAgentProvider {
 
+  @Override
   public String getUserAgent() {
     return "Java/" + System.getProperty("java.version");
   }

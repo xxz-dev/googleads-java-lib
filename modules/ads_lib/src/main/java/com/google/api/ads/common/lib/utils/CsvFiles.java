@@ -17,22 +17,19 @@ package com.google.api.ads.common.lib.utils;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-
-import au.com.bytecode.opencsv.CSVReader;
-import au.com.bytecode.opencsv.CSVWriter;
-
-import java.io.FileReader;
-import java.io.FileWriter;
+import com.google.common.io.Files;
+import com.opencsv.CSVReader;
+import com.opencsv.CSVWriter;
+import java.io.File;
 import java.io.IOException;
 import java.io.Reader;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
 /**
  * A utility class for processing and handling CSV files.
- *
- * @author Adam Rogal
  */
 public final class CsvFiles {
   /**
@@ -61,12 +58,8 @@ public final class CsvFiles {
   public static Map<String, String> getCsvDataMap(String fileName,
       final int key, final int value, boolean headerPresent) throws IOException {    
     final Map<String, String> result = Maps.newHashMap();
-    new CsvReader(fileName, headerPresent).processReader(
-        new CsvReader.CsvWorker() {
-          public void processLine(String[] header, String[] line, int lineNumber) {
-            result.put(line[key], line[value]);
-          }
-        });
+    new CsvReader(fileName, headerPresent)
+        .processReader((header, line, lineNumber) -> result.put(line[key], line[value]));
     return result;
   }
 
@@ -103,14 +96,14 @@ public final class CsvFiles {
   public static Map<String, String[]> getCsvDataMapArray(String fileName, boolean headerPresent)
       throws IOException {
     final Map<String, String[]> result = Maps.newHashMap();
-    new CsvReader(fileName, headerPresent).processReader(
-        new CsvReader.CsvWorker() {
-          public void processLine(String[] header, String[] line, int lineNumber) {
-            result.put(line[0],
-                Arrays.asList(line)
-                    .subList(1, line.length).toArray(new String[line.length - 1]));
-          }
-        });
+    new CsvReader(fileName, headerPresent)
+        .processReader(
+            (header, line, lineNumber) ->
+                result.put(
+                    line[0],
+                    Arrays.asList(line)
+                        .subList(1, line.length)
+                        .toArray(new String[line.length - 1])));
     return result;
   }
 
@@ -128,20 +121,19 @@ public final class CsvFiles {
   public static List<Map<String, String>> getCsvDataListMap(String fileName,
       boolean headerPresent) throws IOException {
     final List<Map<String, String>> result = Lists.newArrayList();
-    new CsvReader(fileName, headerPresent).processReader(
-        new CsvReader.CsvWorker() {
-          public void processLine(String[] headers, String[] line, int lineNumber) {
-            Map<String, String> data = Maps.newHashMap();
-            for (int i = 0; i < line.length; i++) {
-              if (headers != null) {
-                data.put(headers[i], line[i]);
-              } else {
-                data.put(i + "", line[i]);
+    new CsvReader(fileName, headerPresent)
+        .processReader(
+            (headers, line, lineNumber) -> {
+              Map<String, String> data = Maps.newHashMap();
+              for (int i = 0; i < line.length; i++) {
+                if (headers != null) {
+                  data.put(headers[i], line[i]);
+                } else {
+                  data.put(i + "", line[i]);
+                }
               }
-            }
-            result.add(data);
-          }
-        });
+              result.add(data);
+            });
     return result;
   }
 
@@ -159,12 +151,8 @@ public final class CsvFiles {
   public static List<String> getCsvDataByColumn(String fileName, final int column,
       boolean headerPresent) throws IOException {
     final List<String> result = Lists.newArrayList();
-    new CsvReader(fileName, headerPresent).processReader(
-        new CsvReader.CsvWorker() {
-          public void processLine(String[] headers, String[] line, int lineNumber) {
-            result.add(line[column]);
-          }
-        });
+    new CsvReader(fileName, headerPresent)
+        .processReader((headers, line, lineNumber) -> result.add(line[column]));
     return result;
   }
 
@@ -181,12 +169,8 @@ public final class CsvFiles {
   public static List<String[]> getCsvDataArray(String fileName, boolean headerPresent)
       throws IOException {
     final List<String[]> result = Lists.newArrayList();
-    new CsvReader(fileName, headerPresent).processReader(
-        new CsvReader.CsvWorker() {
-          public void processLine(String[] headers, String[] line, int lineNumber) {
-            result.add(line);
-          }
-        });
+    new CsvReader(fileName, headerPresent)
+        .processReader((headers, line, lineNumber) -> result.add(line));
     return result;
   }
 
@@ -202,12 +186,8 @@ public final class CsvFiles {
   public static List<String[]> getCsvDataArray(Reader csvReader, boolean headerPresent)
       throws IOException {
     final List<String[]> result = Lists.newArrayList();
-    new CsvReader(new CSVReader(csvReader), headerPresent).processReader(
-        new CsvReader.CsvWorker() {
-          public void processLine(String[] headers, String[] line, int lineNumber) {
-            result.add(line);
-          }
-        });
+    new CsvReader(new CSVReader(csvReader), headerPresent)
+        .processReader((headers, line, lineNumber) -> result.add(line));
     return result;
   }
   /**
@@ -217,14 +197,15 @@ public final class CsvFiles {
    * @param csvData the CSV data including the header
    * @param fileName the file to write the CSV data to
    * @throws IOException if there was an error writing to the file
-   * @throws IllegalArgumentException if {@code csvData == null}
+   * @throws NullPointerException if {@code csvData == null} or {@code fileName == null}
    */
   public static void writeCsv(List<String[]> csvData, String fileName) throws IOException {
-    Preconditions.checkNotNull(csvData, "Cannot write null CSV data to file.");
+    Preconditions.checkNotNull(csvData, "Null CSV data");
+    Preconditions.checkNotNull(fileName, "Null file name");
 
     CSVWriter writer = null;
     try {
-      writer = new CSVWriter(new FileWriter(fileName));
+      writer = new CSVWriter(Files.newWriter(new File(fileName), StandardCharsets.UTF_8));
       for (String[] line : csvData) {
         writer.writeNext(line);
       }
@@ -285,7 +266,7 @@ public final class CsvFiles {
     private void createCsvReader() throws IOException {
       lineNumber = 1;
       if (reader == null) {
-        reader = new CSVReader(new FileReader(fileName));
+        reader = new CSVReader(Files.newReader(new File(fileName), StandardCharsets.UTF_8));
       }
       if (headerPresent) {
         header = reader.readNext();
@@ -295,7 +276,8 @@ public final class CsvFiles {
 
     /**
      * Performs the {@link CsvWorker#processLine(String[], String[], int)}
-     * method of the {@code worker} parameter for each link in the CSV.
+     * method of the {@code worker} parameter for each link in the CSV,
+     * and closes the underlying {@link CSVReader}.
      *
      * @param worker the {@code CsvWorker} that performs work on each line
      * @throws IOException if the CSV file cannot be read

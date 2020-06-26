@@ -29,8 +29,6 @@ import java.net.URL;
 
 /**
  * A utility class for retrieving media data.
- *
- * @author Adam Rogal
  */
 public final class Media {
 
@@ -95,6 +93,7 @@ public final class Media {
    */
   private static byte[] getByteArrayFromStream(final InputStream inputStream) throws IOException {
     return new ByteSource() {
+      @Override
       public InputStream openStream() {
         return inputStream;
       }
@@ -141,6 +140,7 @@ public final class Media {
   static void writeBytesToStream(byte[] bytes, final OutputStream outputStream)
       throws IOException {
     new ByteSink() {
+      @Override
       public OutputStream openStream() {
         return outputStream;
       }

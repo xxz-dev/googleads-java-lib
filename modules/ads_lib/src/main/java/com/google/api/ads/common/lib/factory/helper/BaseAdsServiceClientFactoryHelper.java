@@ -31,8 +31,6 @@ import java.net.MalformedURLException;
  * @param <C> the type of {@link AdsServiceClient}
  * @param <S> the type of {@link AdsSession}
  * @param <D> the type of {@link AdsServiceDescriptor}
- *
- * @author Adam Rogal
  */
 public abstract class BaseAdsServiceClientFactoryHelper<C extends AdsServiceClient<S, D>,
                                                         S extends AdsSession,
@@ -67,6 +65,7 @@ public abstract class BaseAdsServiceClientFactoryHelper<C extends AdsServiceClie
    * @return the created {@link AdsServiceClient}
    * @throws ServiceException if the ads service client could not be created
    */
+  @Override
   public C createAdsServiceClient(D adsServiceDescriptor, S adsSession) throws ServiceException {
     Object soapClient = createSoapClient(adsServiceDescriptor);
     C adsServiceClient = createServiceClient(soapClient, adsServiceDescriptor, adsSession);
@@ -94,6 +93,7 @@ public abstract class BaseAdsServiceClientFactoryHelper<C extends AdsServiceClie
    * @param version the version of the service
    * @return a descriptor of the requested service
    */
+  @Override
   public D createServiceDescriptor(Class<?> interfaceClass, String version) {
     return adsServiceDescriptorFactory.create(interfaceClass, version);
   }
@@ -109,6 +109,7 @@ public abstract class BaseAdsServiceClientFactoryHelper<C extends AdsServiceClie
   /**
    * Default implementation of passing service client preconditions.
    */
+  @Override
   public void checkServiceClientPreconditions(S adsSession, Class<?> interfaceClass)
       throws ServiceException {}
 }

@@ -15,12 +15,11 @@
 package com.google.api.ads.common.lib.useragent;
 
 import com.google.api.ads.common.lib.conf.ProductFrameworkConfiguration;
-import com.google.inject.Inject;
+
+import javax.inject.Inject;
 
 /**
  * Provides product/framework user agent.
- *
- * @author Adam Rogal
  */
 public class ProductFrameworkUserAgentProvider implements UserAgentProvider {
 
@@ -40,6 +39,7 @@ public class ProductFrameworkUserAgentProvider implements UserAgentProvider {
   /**
    * Generates the framework user agent such as AdWords-Axis/1.4.
    */
+  @Override
   public String getUserAgent() {
     return productFrameworkConfiguration.getLibName() + "/"
         + productFrameworkConfiguration.getLibVersion();

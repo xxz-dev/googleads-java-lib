@@ -14,11 +14,10 @@
 
 package com.google.api.ads.common.lib.soap;
 
+import com.google.api.ads.common.lib.client.RemoteCallReturn;
 import com.google.api.ads.common.lib.exception.ServiceException;
-
 import java.lang.reflect.Method;
 import java.util.Map;
-
 import javax.xml.namespace.QName;
 import javax.xml.soap.SOAPHeaderElement;
 
@@ -28,9 +27,8 @@ import javax.xml.soap.SOAPHeaderElement;
  * from different frameworks. There is separate handler for each framework
  * that implements this interface.
  *
- * @param <T> the SOAP client type
- *
- * @author Adam Rogal
+ * @param <T> the client type for the SOAP toolkit, e.g., {@code Stub}
+ * for Axis, {@code BindingProvider} for JAX-WS, etc.
  */
 public interface SoapClientHandlerInterface<T> {
 
@@ -51,7 +49,7 @@ public interface SoapClientHandlerInterface<T> {
    * @param soapCall the {@code SoapCall} to execute
    * @return the result from the call to the SOAP client
    */
-  SoapCallReturn invokeSoapCall(SoapCall<T> soapCall);
+  RemoteCallReturn invokeSoapCall(SoapCall<T> soapCall);
 
   /**
    * Sets the endpoint address on the SOAP client.
@@ -110,6 +108,14 @@ public interface SoapClientHandlerInterface<T> {
    * compression.
    */
   void setCompression(T soapClient, boolean compress);
+  
+  /**
+   * Sets the read timeout of the given SOAP client.
+   *
+   * @param soapClient the SOAP client to set the read timeout for
+   * @param timeout the timeout in milliseconds
+   */
+  void setRequestTimeout(T soapClient, int timeout);
 
   /**
    * Gets the method from the SOAP client that matches the supplied method.

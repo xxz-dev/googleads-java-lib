@@ -14,18 +14,23 @@
 
 package com.google.api.ads.common.lib.utils.logging;
 
-/**
- * Interface capable of pretty printing XML messages.
- *
- * @author Joseph DiLallo
- */
+/** Interface capable of pretty printing messages (e.g., XML). */
 public interface PrettyPrinterInterface {
 
   /**
-   * Transforms XML into a pretty-printed format.
+   * Transforms the message into a pretty-printed format. Implementations should:
    *
-   * @param xml the XML message to be pretty printed
+   * <ol>
+   *   <li>Sanitize the message by replacing any sensitive information with a token such as {@code
+   *       REDACTED}.
+   *   <li>Return the original message if an exception occurs during formatting.
+   * </ol>
+   *
+   * @param message the message to be pretty printed
    * @return the given message in pretty-printed format
    */
-  public String prettyPrint(String xml);
+  public String prettyPrint(String message);
+
+  /** Default implementation that simply returns the message. */
+  public static PrettyPrinterInterface NO_OP_PRETTY_PRINTER = message -> message;
 }

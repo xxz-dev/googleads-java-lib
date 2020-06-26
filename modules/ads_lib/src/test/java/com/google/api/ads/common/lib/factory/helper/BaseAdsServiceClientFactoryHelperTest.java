@@ -34,9 +34,6 @@ import org.mockito.MockitoAnnotations;
 
 /**
  * Tests for {@link BaseAdsServiceClientFactoryHelper}.
- *
- * @author Adam Rogal
- * @author Joseph DiLallo
  */
 @RunWith(JUnit4.class)
 public class BaseAdsServiceClientFactoryHelperTest {
@@ -66,11 +63,10 @@ public class BaseAdsServiceClientFactoryHelperTest {
   public void setUp() {
     MockitoAnnotations.initMocks(this);
 
-    abstractAdsServiceClientFactoryHelper =
-        new BaseAdsServiceClientFactoryHelper<AdsServiceClient<AdsSession, AdsServiceDescriptor>,
-                                              AdsSession,
-                                              AdsServiceDescriptor>(
-            adsServiceClientFactory, adsServiceDescriptorFactory, soapClientHandler) {
+    abstractAdsServiceClientFactoryHelper = new BaseAdsServiceClientFactoryHelper<
+        AdsServiceClient<AdsSession, AdsServiceDescriptor>, AdsSession, AdsServiceDescriptor>(
+        adsServiceClientFactory, adsServiceDescriptorFactory, soapClientHandler) {
+      @Override
       @SuppressWarnings("rawtypes")
       public String determineVersion(Class interfaceClass) {
         return VERSION;
@@ -80,9 +76,6 @@ public class BaseAdsServiceClientFactoryHelperTest {
 
   @Test
   public void testCreateAdsServiceClient() {
-    String endpointServer = "testServer";
-    String endpointAddress = "testAddress";
-
     when(soapClientHandler.createSoapClient(adsServiceDescriptor)).thenReturn(soapClient);
     when(adsServiceClientFactory.create(soapClient, adsServiceDescriptor, adsSession))
         .thenReturn(adsServiceClient);

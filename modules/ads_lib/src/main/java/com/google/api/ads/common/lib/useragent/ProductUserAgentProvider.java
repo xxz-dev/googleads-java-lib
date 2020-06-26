@@ -15,12 +15,11 @@
 package com.google.api.ads.common.lib.useragent;
 
 import com.google.api.ads.common.lib.conf.ProductConfiguration;
-import com.google.inject.Inject;
+
+import javax.inject.Inject;
 
 /**
  * Provides product user agent.
- *
- * @author Adam Rogal
  */
 public class ProductUserAgentProvider implements UserAgentProvider {
 
@@ -39,6 +38,7 @@ public class ProductUserAgentProvider implements UserAgentProvider {
   /**
    * Generates the product user agent such as AwApi-Java.
    */
+  @Override
   public String getUserAgent() {
     return productConfiguration.getProductNamePrefix() + "-"
         + productConfiguration.getProductNamePostfix();

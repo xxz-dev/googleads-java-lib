@@ -26,8 +26,6 @@ import org.junit.runners.JUnit4;
 
 /**
  * Integration tests for {@link OfflineCredentials}.
- *
- * @author Adam Rogal
  */
 @RunWith(JUnit4.class)
 public class OfflineCredentialsIntegrationTest extends MockHttpIntegrationTest {
@@ -44,7 +42,7 @@ public class OfflineCredentialsIntegrationTest extends MockHttpIntegrationTest {
         + "\"refresh_token\" : \"newRefreshToken\"}");
 
     OfflineCredentials offlineCredentials = new OfflineCredentials.Builder()
-        .forApi(OfflineCredentials.Api.DFP)
+        .forApi(OfflineCredentials.Api.AD_MANAGER)
         .withTokenUrlServer(testHttpServer.getServerUrl())
         .withClientSecrets("clientId", "clientSecret")
         .withRefreshToken("refreshToken")
@@ -75,7 +73,7 @@ public class OfflineCredentialsIntegrationTest extends MockHttpIntegrationTest {
 
     OfflineCredentials offlineCredentials =
         new OfflineCredentials.Builder()
-            .forApi(OfflineCredentials.Api.DFP)
+            .forApi(OfflineCredentials.Api.AD_MANAGER)
             .withTokenUrlServer(testHttpServer.getServerUrl())
             .fromFile(
                 OfflineCredentialsIntegrationTest.class.getResource("props/ads-test.properties"))
