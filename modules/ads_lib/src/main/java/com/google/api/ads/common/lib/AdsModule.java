@@ -15,16 +15,15 @@
 package com.google.api.ads.common.lib;
 
 import com.google.api.ads.common.lib.auth.AuthModule;
+import com.google.api.ads.common.lib.utils.AdsUtilityRegistry;
 import com.google.api.ads.common.lib.utils.logging.LoggingModule;
 import com.google.inject.AbstractModule;
+import com.google.inject.Provides;
 
 /**
  * Guice module for common bindings.
- *
- * @author Adam Rogal
  */
-public class AdsModule extends AbstractModule {
-
+public abstract class AdsModule extends AbstractModule {
   public AdsModule() {}
 
   /**
@@ -42,5 +41,14 @@ public class AdsModule extends AbstractModule {
    */
   protected void configureLogging(String loggerPrefix) {
     install(new LoggingModule(loggerPrefix));
+  }
+
+  /**
+   * Provider method for Guice to ensure that all objects that need an AdsUtilityRegistry obtain the
+   * same instance, even if those objects were injected by different Guice injectors.
+   */
+  @Provides
+  private AdsUtilityRegistry getAdsUtilityRegistry() {
+    return AdsUtilityRegistry.getInstance();
   }
 }

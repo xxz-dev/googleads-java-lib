@@ -16,21 +16,18 @@ package com.google.api.ads.common.lib.utils;
 
 import com.google.api.ads.common.lib.conf.ConfigurationLoadException;
 import com.google.api.ads.common.lib.exception.ValidationException;
-
-import org.apache.commons.configuration.Configuration;
-
 import java.io.File;
 import java.net.URL;
+import org.apache.commons.configuration.Configuration;
 
 /**
  * Builder interface.
  *
  * @param <T> the builder type
- *
- * @author Adam Rogal
  */
 public interface Builder<T> {
 
+  /** The default configuration filename used when {@link #fromFile()} is called. */
   public static String DEFAULT_CONFIGURATION_FILENAME = "ads.properties";
 
   /**
@@ -49,8 +46,8 @@ public interface Builder<T> {
   public Builder<T> from(Configuration config) throws ConfigurationLoadException;
 
   /**
-   * Loads credentials from "ads.properties" file in one of the following
-   * locations according to the following order: in the current directory, in
+   * Loads credentials from the {@value #DEFAULT_CONFIGURATION_FILENAME} file in one of the
+   * following locations according to the following order: in the current directory, in
    * the user home directory, in the classpath
    * @throws ConfigurationLoadException if the configuration could not be
    *         loaded.

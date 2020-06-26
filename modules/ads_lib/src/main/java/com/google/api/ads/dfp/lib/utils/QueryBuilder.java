@@ -25,8 +25,6 @@ import java.util.Map;
  * {@code QueryBuilder} allows for queries to be constructed in parts.
  *
  * @param <V> the type of the API Value
- *
- * @author Adam Rogal
  */
 public class QueryBuilder<V> implements QueryBuilderInterface<V> {
 
@@ -77,6 +75,7 @@ public class QueryBuilder<V> implements QueryBuilderInterface<V> {
    * @param columns the statement select clause without "SELECT"
    * @return a reference to this object
    */
+  @Override
   public QueryBuilder<V> select(String columns) {
     Preconditions.checkNotNull(columns, "SELECT clause cannot be null");
     columns = removeKeyword(columns, SELECT);
@@ -93,6 +92,7 @@ public class QueryBuilder<V> implements QueryBuilderInterface<V> {
    * @param table the statement from clause without "FROM"
    * @return a reference to this object
    */
+  @Override
   public QueryBuilder<V> from(String table) {
     Preconditions.checkNotNull(table, "FROM clause cannot be null");
     table = removeKeyword(table, FROM);
@@ -108,6 +108,7 @@ public class QueryBuilder<V> implements QueryBuilderInterface<V> {
    * @param conditions the statement query without "WHERE"
    * @return a reference to this object
    */
+  @Override
   public QueryBuilder<V> where(String conditions) {
     Preconditions.checkNotNull(conditions, "WHERE clause cannot be null");
     conditions = removeKeyword(conditions, WHERE);
@@ -123,6 +124,7 @@ public class QueryBuilder<V> implements QueryBuilderInterface<V> {
    * @param count the statement limit
    * @return a reference to this object
    */
+  @Override
   public QueryBuilder<V> limit(Integer count) {
     this.limit = count;
     return this;
@@ -136,6 +138,7 @@ public class QueryBuilder<V> implements QueryBuilderInterface<V> {
    * @param count the statement offset
    * @return a reference to this object
    */
+  @Override
   public QueryBuilder<V> offset(Integer count) {
     this.offset = count;
     return this;
@@ -146,6 +149,7 @@ public class QueryBuilder<V> implements QueryBuilderInterface<V> {
    * @param amount the amount to increase the offset
    * @return a reference to this object
    */
+  @Override
   public QueryBuilder<V> increaseOffsetBy(Integer amount) {
     if (offset == null) {
       offset = 0;
@@ -158,6 +162,7 @@ public class QueryBuilder<V> implements QueryBuilderInterface<V> {
    * Gets the current offset.
    * @return the current offset
    */
+  @Override
   public Integer getOffset() {
     return this.offset;
   }
@@ -166,6 +171,7 @@ public class QueryBuilder<V> implements QueryBuilderInterface<V> {
    * Removes the limit and offset from the query.
    * @return a reference to this object
    */
+  @Override
   public QueryBuilder<V> removeLimitAndOffset() {
     offset = null;
     limit = null;
@@ -181,6 +187,7 @@ public class QueryBuilder<V> implements QueryBuilderInterface<V> {
    * @param orderBy the statement order by without "ORDER BY"
    * @return a reference to this object
    */
+  @Override
   public QueryBuilder<V> orderBy(String orderBy) {
     Preconditions.checkNotNull(orderBy, "ORDER BY clause cannot be null");
     orderBy = removeKeyword(orderBy, ORDER_BY);
@@ -195,6 +202,7 @@ public class QueryBuilder<V> implements QueryBuilderInterface<V> {
    * @param value the value
    * @return a reference to this object
    */
+  @Override
   public QueryBuilder<V> withBindVariableValue(String key, V value) {
     valueMap.put(key, value);
     return this;
@@ -214,6 +222,7 @@ public class QueryBuilder<V> implements QueryBuilderInterface<V> {
   /**
    * Returns an unmodifiable form of the key to value map.
    */
+  @Override
   public Map<String, V> getBindVariableMap() {
     return Collections.unmodifiableMap(valueMap);
   }
@@ -230,6 +239,7 @@ public class QueryBuilder<V> implements QueryBuilderInterface<V> {
    * Builds the query from the clauses.
    * @return the c query
    */
+  @Override
   public String buildQuery() {
     validateQuery();
 

@@ -15,7 +15,6 @@
 package com.google.api.ads.dfp.lib.factory.helper;
 
 import com.google.api.ads.common.lib.conf.AdsLibConfiguration;
-import com.google.api.ads.common.lib.exception.ServiceException;
 import com.google.api.ads.common.lib.factory.FactoryModule.AdsServiceClientFactoryInterface;
 import com.google.api.ads.common.lib.factory.FactoryModule.AdsServiceDescriptorFactoryInterface;
 import com.google.api.ads.common.lib.factory.helper.AdsServiceClientFactoryHelper;
@@ -24,16 +23,14 @@ import com.google.api.ads.common.lib.soap.SoapClientHandlerInterface;
 import com.google.api.ads.dfp.lib.client.DfpServiceClient;
 import com.google.api.ads.dfp.lib.client.DfpServiceDescriptor;
 import com.google.api.ads.dfp.lib.client.DfpSession;
-import com.google.common.base.Strings;
-import com.google.inject.Inject;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import javax.inject.Inject;
+
 /**
  * Factory helper for Dfp.
- *
- * @author Adam Rogal
  */
 public class DfpServiceClientFactoryHelper extends
     BaseAdsServiceClientFactoryHelper<DfpServiceClient,
@@ -41,7 +38,6 @@ public class DfpServiceClientFactoryHelper extends
                                       DfpServiceDescriptor> {
 
   private static final Pattern VERSION_PATTERN = Pattern.compile("^.*(v[0-9][^\\.]*).*$");
-  private static final String FINAL_CLIENT_LOGIN_VERSION = "v201311";
 
   private final AdsLibConfiguration adsLibConfiguration;
 
@@ -53,15 +49,17 @@ public class DfpServiceClientFactoryHelper extends
    * @param soapClientHandler the SOAP client handler
    * @param adsLibConfiguration the lib configuration
    */
-  @SuppressWarnings("unchecked") // All generics of SoapClientHandlerInterface
-                                 // extend Object.
+  @SuppressWarnings("unchecked") /* See comments on soapClientHandler argument. */
   @Inject
   public DfpServiceClientFactoryHelper(
       AdsServiceClientFactoryInterface<DfpServiceClient,
                                        DfpSession,
                                        DfpServiceDescriptor> adsServiceClientFactory,
       AdsServiceDescriptorFactoryInterface<DfpServiceDescriptor> adsServiceDescriptorFactory,
-      @SuppressWarnings({"rawtypes", "unchecked"})  /* Due to problem with guice binding */
+      @SuppressWarnings("rawtypes") /* Guice binding for SoapClientHandlerInterface does not include
+                                     * the type argument T because it is bound in the SOAP
+                                     * toolkit-agnostic configuration module. Therefore, must use
+                                     * the raw type here. */
       SoapClientHandlerInterface soapClientHandler,
       AdsLibConfiguration adsLibConfiguration) {
     super(adsServiceClientFactory, adsServiceDescriptorFactory, soapClientHandler);
@@ -71,6 +69,7 @@ public class DfpServiceClientFactoryHelper extends
   /**
    * @see AdsServiceClientFactoryHelper#determineVersion(Class)
    */
+  @Override
   public String determineVersion(Class<?> interfaceClass) {
     Matcher m = VERSION_PATTERN.matcher(interfaceClass.getPackage().getName());
     if (m.matches()) {
@@ -78,19 +77,6 @@ public class DfpServiceClientFactoryHelper extends
       return version.replace('_', '.');
     } else {
       return adsLibConfiguration.getDuckTypedVersion();
-    }
-  }
-
-  /**
-   * @see AdsServiceClientFactoryHelper#checkServiceClientPreconditions(AdsSession, Class)
-   */
-  public void checkServiceClientPreconditions(DfpSession dfpSession, Class<?> interfaceClass)
-      throws ServiceException {
-    String version = determineVersion(interfaceClass);
-    if (!Strings.isNullOrEmpty(dfpSession.getClientLoginToken())
-        && version.compareTo(FINAL_CLIENT_LOGIN_VERSION) > 0) {
-      throw new ServiceException(String.format("ClientLogin is not supported in version %s."
-          + " Please upgrade to OAuth2.", version));
     }
   }
 }

@@ -29,7 +29,6 @@ import org.mockito.MockitoAnnotations;
 /**
  * Test for {@link UserAgentCombiner}.
 
- * @author Adam Rogal
  */
 @RunWith(JUnit4.class)
 public class UserAgentCombinerTest {
@@ -54,7 +53,12 @@ public class UserAgentCombinerTest {
     when(userAgentProvider1.getUserAgent()).thenReturn("userAgent/1");
     when(userAgentProvider2.getUserAgent()).thenReturn("userAgent/2");
 
-    assertEquals("myUserAgent (userAgent/1, userAgent/2)",
+    assertEquals(
+        "myUserAgent (userAgent/1, userAgent/2)",
+        userAgentCombiner.getUserAgent(nonLibraryUserAgent));
+
+    assertEquals(
+        "myUserAgent (userAgent/1, userAgent/2)",
         userAgentCombiner.getUserAgent(nonLibraryUserAgent));
   }
 }

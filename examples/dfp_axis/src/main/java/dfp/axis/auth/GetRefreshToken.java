@@ -1,4 +1,4 @@
-// Copyright 2013 Google Inc. All Rights Reserved.
+// Copyright 2015 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,27 +25,35 @@ import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
 import com.google.api.client.googleapis.auth.oauth2.GoogleTokenResponse;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.jackson2.JacksonFactory;
-import com.google.common.collect.Lists;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * This example will create an OAuth2 refresh token that can be used with the
  * OfflineCredentials utility. Please copy the refresh token into your
  * ads.properites file after running.
  *
- * This example is meant to be run from the command line and requires user
+ * <p>This example is meant to be run from the command line and requires user
  * input.
  *
- * Credentials and properties in {@code fromFile()} are pulled from the
+ * <p>Credentials and properties in {@code fromFile()} are pulled from the
  * "ads.properties" file. See README for more info.
- *
- * @author Adam Rogal
  */
 public class GetRefreshToken {
 
-  private static final String SCOPE = "https://www.google.com/apis/ads/publisher";
+  /**
+   * The OAuth2 scope for the DFP API.
+   */
+  public static final String DFP_API_SCOPE = "https://www.googleapis.com/auth/dfp";
+
+  /**
+   * Scopes to include in the authorization request. Add to this list any additional scopes you want
+   * to include.
+   */
+  private static final List<String> SCOPES = Arrays.asList(DFP_API_SCOPE);
 
   // This callback URL will allow you to copy the token from the success screen.
   private static final String CALLBACK_URL = "urn:ietf:wg:oauth:2.0:oob";
@@ -56,7 +64,7 @@ public class GetRefreshToken {
         new NetHttpTransport(),
         new JacksonFactory(),
         clientSecrets,
-        Lists.newArrayList(SCOPE))
+        SCOPES)
         // Set the access type to offline so that the token can be refreshed.
         // By default, the library will automatically refresh tokens when it
         // can, but this can be turned off by setting
@@ -65,10 +73,11 @@ public class GetRefreshToken {
 
     String authorizeUrl =
         authorizationFlow.newAuthorizationUrl().setRedirectUri(CALLBACK_URL).build();
-    System.out.println("Paste this url in your browser: \n" + authorizeUrl + '\n');
+    System.out.printf("Paste this url in your browser:%n%s%n", authorizeUrl);
 
     // Wait for the authorization code.
     System.out.println("Type the code you received here: ");
+    @SuppressWarnings("DefaultCharset") // Reading from stdin, so default charset is appropriate.
     String authorizationCode = new BufferedReader(new InputStreamReader(System.in)).readLine();
 
     // Authorize the OAuth2 token.
@@ -93,7 +102,7 @@ public class GetRefreshToken {
   public static void main(String[] args) throws Exception {
     // Get the client ID and secret from the ads.properties file.
     // If you do not have a client ID or secret, please create one in the
-    // API console: https://code.google.com/apis/console#access and set it
+    // API console: https://console.developers.google.com/project and set it
     // in the ads.properties file.
     GoogleClientSecrets clientSecrets = null;
     try {
@@ -106,17 +115,17 @@ public class GetRefreshToken {
           "Please input your client ID and secret into your ads.properties file, which is either "
           + "located in your home directory in your src/main/resources directory, or "
           + "on your classpath. If you do not have a client ID or secret, please create one in "
-          + "the API console: https://code.google.com/apis/console#access");
+          + "the API console: https://console.developers.google.com/project");
       System.exit(1);
     }
 
     // Get the OAuth2 credential.
     Credential credential = getOAuth2Credential(clientSecrets);
 
-    System.out.printf("Your refresh token is: %s\n", credential.getRefreshToken());
+    System.out.printf("Your refresh token is: %s%n", credential.getRefreshToken());
 
     // Enter the refresh token into your ads.properties file.
-    System.out.printf("In your ads.properties file, modify:\n\napi.dfp.refreshToken=%s\n",
+    System.out.printf("In your ads.properties file, modify:%n%napi.dfp.refreshToken=%s%n",
         credential.getRefreshToken());
   }
 }

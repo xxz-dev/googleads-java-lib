@@ -21,8 +21,6 @@ import java.net.MalformedURLException;
 
 /**
  * Interface for ads service descriptors.
- *
- * @author api.arogal(Adam Rogal)
  */
 public interface AdsServiceDescriptor extends SoapServiceDescriptor {
 
@@ -31,6 +29,7 @@ public interface AdsServiceDescriptor extends SoapServiceDescriptor {
    *
    * @throws ServiceException if the interface could not be retrieved.
    */
+  @Override
   Class<?> getInterfaceClass() throws ServiceException;
 
   /**
@@ -39,6 +38,7 @@ public interface AdsServiceDescriptor extends SoapServiceDescriptor {
    * @return the endpoint address for this service and server.
    * @throws MalformedURLException 
    */
+  @Override
   String getEndpointAddress(String endpointServer) throws MalformedURLException;
 
   /**

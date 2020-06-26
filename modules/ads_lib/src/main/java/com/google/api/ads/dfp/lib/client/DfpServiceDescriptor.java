@@ -19,18 +19,16 @@ import com.google.api.ads.common.lib.exception.ServiceException;
 import com.google.api.ads.common.lib.soap.compatability.AxisCompatible;
 import com.google.api.ads.common.lib.soap.compatability.JaxWsCompatible;
 import com.google.common.annotations.VisibleForTesting;
-import com.google.inject.Inject;
 import com.google.inject.assistedinject.Assisted;
 
 import java.net.MalformedURLException;
 import java.net.URL;
 
+import javax.inject.Inject;
+
 /**
  * {@code DfpServiceDescriptor} provides a class which defines a service
  * that can be instantiated through reflection.
- *
- * @author Adam Rogal
- * @author Jeff Sham
  */
 public class DfpServiceDescriptor implements AdsServiceDescriptor, AxisCompatible,
     JaxWsCompatible {
@@ -55,6 +53,7 @@ public class DfpServiceDescriptor implements AdsServiceDescriptor, AxisCompatibl
   /**
    * @see AdsServiceDescriptor#getInterfaceClass()
    */
+  @Override
   public Class<?> getInterfaceClass() throws ServiceException {
     return interfaceClass;
   }
@@ -63,6 +62,7 @@ public class DfpServiceDescriptor implements AdsServiceDescriptor, AxisCompatibl
    * @throws MalformedURLException
    * @see AdsServiceDescriptor#getEndpointAddress(String)
    */
+  @Override
   public String getEndpointAddress(String endpointServer) throws MalformedURLException {
     String serviceName = getServiceName();
     String endpointServerUrl = new URL(endpointServer).toString();
@@ -75,6 +75,7 @@ public class DfpServiceDescriptor implements AdsServiceDescriptor, AxisCompatibl
   /**
    * @see AdsServiceDescriptor#getVersion()
    */
+  @Override
   public String getVersion() {
     return version;
   }
@@ -82,6 +83,7 @@ public class DfpServiceDescriptor implements AdsServiceDescriptor, AxisCompatibl
   /**
    * @see AxisCompatible#getLocatorClass()
    */
+  @Override
   public Class<?> getLocatorClass() throws ClassNotFoundException {
     return Class.forName(
         interfaceClass.getPackage().getName() + "." + getServiceName() + "Locator");
@@ -101,6 +103,7 @@ public class DfpServiceDescriptor implements AdsServiceDescriptor, AxisCompatibl
   /**
    * @see JaxWsCompatible#getServiceClass()
    */
+  @Override
   public Class<?> getServiceClass() throws ClassNotFoundException {
     return Class.forName(interfaceClass.getPackage().getName() + "." + getServiceName());
   }

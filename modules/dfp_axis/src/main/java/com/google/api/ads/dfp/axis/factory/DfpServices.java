@@ -29,17 +29,15 @@ import com.google.inject.Injector;
  * DfpSession session = new DfpSession.Builder()...build();
  * InventoryServiceInterface inventoryService =
  *    new  DfpServices().get(session, InventoryServiceInterface.class);
- * campaignService.makeRequest(...);
+ * inventoryService.makeRequest(...);
  * ...
  * session.setNetworkCode(...);
- * campaignService.makeRequest(...);
+ * inventoryService.makeRequest(...);
  * </code></pre>
  *
  * <p>
  * Implementation is thread-safe.
  * </p>
- *
- * @author Joseph DiLallo
  */
 public final class DfpServices extends BaseDfpServices {
 

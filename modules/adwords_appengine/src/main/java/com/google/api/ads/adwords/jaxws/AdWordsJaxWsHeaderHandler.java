@@ -15,43 +15,39 @@
 package com.google.api.ads.adwords.jaxws;
 
 import com.google.api.ads.adwords.lib.client.AdWordsServiceDescriptor;
-import com.google.api.ads.adwords.lib.client.AdWordsServiceDescriptor.AdWordsSubProduct;
 import com.google.api.ads.adwords.lib.client.AdWordsSession;
 import com.google.api.ads.adwords.lib.conf.AdWordsApiConfiguration;
 import com.google.api.ads.common.lib.client.HeaderHandler;
+import com.google.api.ads.common.lib.conf.AdsLibConfiguration;
 import com.google.api.ads.common.lib.exception.AuthenticationException;
 import com.google.api.ads.common.lib.exception.ServiceException;
 import com.google.api.ads.common.lib.soap.AuthorizationHeaderHandler;
-import com.google.api.ads.common.lib.soap.SoapClientHandlerInterface;
+import com.google.api.ads.common.lib.soap.jaxws.JaxWsHandler;
 import com.google.api.ads.common.lib.useragent.UserAgentCombiner;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
-import com.google.inject.Inject;
-
 import java.util.Map;
-
+import javax.inject.Inject;
 import javax.xml.namespace.QName;
 import javax.xml.soap.SOAPElement;
 import javax.xml.soap.SOAPException;
 import javax.xml.soap.SOAPFactory;
+import javax.xml.ws.BindingProvider;
 
 /**
  * AdWords implementation of {@link HeaderHandler} for JAX-WS.
- *
- * @author Joseph DiLallo
- * @author Josh Radcliff
  */
 public class AdWordsJaxWsHeaderHandler implements
     HeaderHandler<AdWordsSession, AdWordsServiceDescriptor> {
 
   static final String REQUEST_HEADER_LOCAL_PART = "RequestHeader";
 
-  private final SoapClientHandlerInterface<Object> soapClientHandler;
+  private final JaxWsHandler soapClientHandler;
   private final AdWordsApiConfiguration adWordsApiConfiguration;
+  private final AdsLibConfiguration adsLibConfiguration;
   private final AuthorizationHeaderHandler authorizationHeaderHandler;
   private final UserAgentCombiner userAgentCombiner;
-  private final Map<AdWordsSubProduct, HeaderHandler<AdWordsSession, AdWordsServiceDescriptor>>
-      subProductHeaderHandlerMap;
 
   /**
    * Constructor.
@@ -61,22 +57,18 @@ public class AdWordsJaxWsHeaderHandler implements
    * @param authorizationHeaderHandler the authorization header handler
    * @param userAgentCombiner the full user agent provider
    */
-  @SuppressWarnings("unchecked") // All generics of SoapClientHandlerInterface
-                                 // extend Object.
   @Inject
   public AdWordsJaxWsHeaderHandler(
-      @SuppressWarnings("rawtypes") /* Due to problem with guice binding */
-      SoapClientHandlerInterface soapClientHandler,
+      JaxWsHandler soapClientHandler,
       AdWordsApiConfiguration adWordsApiConfiguration,
+      AdsLibConfiguration adsLibConfiguration,
       AuthorizationHeaderHandler authorizationHeaderHandler,
-      UserAgentCombiner userAgentCombiner,
-      Map<AdWordsSubProduct,
-          HeaderHandler<AdWordsSession, AdWordsServiceDescriptor>> subProductHeaderHandlerMap) {
+      UserAgentCombiner userAgentCombiner) {
     this.soapClientHandler = soapClientHandler;
     this.adWordsApiConfiguration = adWordsApiConfiguration;
+    this.adsLibConfiguration = adsLibConfiguration;
     this.authorizationHeaderHandler = authorizationHeaderHandler;
     this.userAgentCombiner = userAgentCombiner;
-    this.subProductHeaderHandlerMap = subProductHeaderHandlerMap;
   }
 
   /**
@@ -84,17 +76,23 @@ public class AdWordsJaxWsHeaderHandler implements
    *      com.google.api.ads.common.lib.client.AdsSession,
    *      com.google.api.ads.common.lib.client.AdsServiceDescriptor)
    */
+  @Override
   public void setHeaders(Object soapClient, AdWordsSession adWordsSession,
       AdWordsServiceDescriptor adWordsServiceDescriptor) throws AuthenticationException,
       ServiceException {
-    Map<String, Object> headerData = readHeaderElements(adWordsSession, adWordsServiceDescriptor);
+    Preconditions.checkArgument(
+        soapClient instanceof BindingProvider,
+        "soapClient must be BindingProvider but was: %s",
+        soapClient);
+    BindingProvider bindingProvider = (BindingProvider) soapClient;
+
+    Map<String, Object> headerData = readHeaderElements(adWordsSession);
     setAuthenticationHeaders(soapClient, headerData, adWordsSession);
-    soapClientHandler.setHeader(soapClient, null, null,
-        constructSoapHeader(headerData, adWordsServiceDescriptor));
-    
-    HeaderHandler<AdWordsSession, AdWordsServiceDescriptor> subProductHandler =
-        subProductHeaderHandlerMap.get(adWordsServiceDescriptor.getSubProduct());
-    subProductHandler.setHeaders(soapClient, adWordsSession, adWordsServiceDescriptor);
+    soapClientHandler.setHeader(
+        bindingProvider, null, null, constructSoapHeader(headerData, adWordsServiceDescriptor));
+    soapClientHandler.setCompression(bindingProvider, adsLibConfiguration.isCompressionEnabled());
+    soapClientHandler.setRequestTimeout(
+        bindingProvider, adsLibConfiguration.getSoapRequestTimeout());
   }
 
   /**
@@ -109,11 +107,7 @@ public class AdWordsJaxWsHeaderHandler implements
   @VisibleForTesting
   void setAuthenticationHeaders(Object soapClient, Map<String, Object> headerElements,
       AdWordsSession adWordsSession) throws AuthenticationException {
-    if (adWordsSession.getClientLoginToken() != null) {
-      headerElements.put("authToken", adWordsSession.getClientLoginToken());
-    } else {
-      authorizationHeaderHandler.setAuthorization(soapClient, adWordsSession);
-    }
+    authorizationHeaderHandler.setAuthorization(soapClient, adWordsSession);
   }
 
   /**
@@ -121,14 +115,13 @@ public class AdWordsJaxWsHeaderHandler implements
    * set AdWords SOAP headers.
    *
    * @param adWordsSession the user's session object
-   * @param adWordsServiceDescriptor descriptor for the AdWords service
    * @return a map of HTTP header names to values
    */
-  private Map<String, Object> readHeaderElements(AdWordsSession adWordsSession,
-      AdWordsServiceDescriptor adWordsServiceDescriptor) {
-    Map<String, Object> mapToFill = Maps.newHashMap();
-    mapToFill.put("developerToken", adWordsSession.getDeveloperToken());
+  private Map<String, Object> readHeaderElements(AdWordsSession adWordsSession) {
+    // The order here must match the order of the SoapHeader elements in the WSDL.
+    Map<String, Object> mapToFill = Maps.newLinkedHashMap();
     mapToFill.put("clientCustomerId", adWordsSession.getClientCustomerId());
+    mapToFill.put("developerToken", adWordsSession.getDeveloperToken());
     mapToFill.put("userAgent", userAgentCombiner.getUserAgent(adWordsSession.getUserAgent()));
     mapToFill.put("validateOnly", adWordsSession.isValidateOnly());
     mapToFill.put("partialFailure", adWordsSession.isPartialFailure());
@@ -167,7 +160,8 @@ public class AdWordsJaxWsHeaderHandler implements
       }
       return requestHeader;
     } catch (SOAPException e) {
-      throw new ServiceException("Unexpected exception.", e);
+      throw new ServiceException(
+          "Unexpected exception constructing SOAP header for: " + adWordsServiceDescriptor, e);
     }
   }
 }

@@ -1,4 +1,4 @@
-// Copyright 2013 Google Inc. All Rights Reserved.
+// Copyright 2015 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,8 +17,8 @@ package dfp.axis.auth;
 import com.google.api.ads.common.lib.conf.ConfigurationLoadException;
 import com.google.api.ads.common.lib.exception.ValidationException;
 import com.google.api.ads.dfp.axis.factory.DfpServices;
-import com.google.api.ads.dfp.axis.v201308.Network;
-import com.google.api.ads.dfp.axis.v201308.NetworkServiceInterface;
+import com.google.api.ads.dfp.axis.v201711.Network;
+import com.google.api.ads.dfp.axis.v201711.NetworkServiceInterface;
 import com.google.api.ads.dfp.lib.client.DfpSession;
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
@@ -28,11 +28,11 @@ import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.client.util.store.DataStoreFactory;
 import com.google.api.client.util.store.MemoryDataStoreFactory;
-import com.google.common.collect.Lists;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.Arrays;
 
 /**
  * This example demonstrates how to create a Credential object from scratch.<br>
@@ -44,19 +44,17 @@ import java.io.InputStreamReader;
  * application that will not need to have multiple users log in, using
  * OfflineCredentials to generate a refreshable OAuth2
  * credential instead will be much easier.
- *
- * @author Adam Rogal
  */
 public class AdvancedCreateCredentialFromScratch {
 
-  private static final String SCOPE = "https://www.google.com/apis/ads/publisher";
+  private static final String SCOPE = "https://www.googleapis.com/auth/dfp";
 
   // This callback URL will allow you to copy the token from the success screen.
   // This must match the one associated with your client ID.
   private static final String CALLBACK_URL = "urn:ietf:wg:oauth:2.0:oob";
 
   // If you do not have a client ID or secret, please create one in the
-  // API console: https://code.google.com/apis/console#access
+  // API console: https://console.developers.google.com/project
   private static final String CLIENT_ID = "INSERT_CLIENT_ID_HERE";
   private static final String CLIENT_SECRET = "INSERT_CLIENT_SECRET_HERE";
 
@@ -68,14 +66,14 @@ public class AdvancedCreateCredentialFromScratch {
   private static void authorize(DataStoreFactory storeFactory, String userId) throws Exception {
     // Depending on your application, there may be more appropriate ways of
     // performing the authorization flow (such as on a servlet), see
-    // https://code.google.com/p/google-api-java-client/wiki/OAuth2#Authorization_Code_Flow
+    // https://developers.google.com/api-client-library/java/google-api-java-client/oauth2#authorization_code_flow
     // for more information.
     GoogleAuthorizationCodeFlow authorizationFlow = new GoogleAuthorizationCodeFlow.Builder(
         new NetHttpTransport(),
         new JacksonFactory(),
         CLIENT_ID,
         CLIENT_SECRET,
-        Lists.newArrayList(SCOPE))
+        Arrays.asList(SCOPE))
         .setDataStoreFactory(storeFactory)
         // Set the access type to offline so that the token can be refreshed.
         // By default, the library will automatically refresh tokens when it
@@ -85,10 +83,11 @@ public class AdvancedCreateCredentialFromScratch {
 
     String authorizeUrl =
         authorizationFlow.newAuthorizationUrl().setRedirectUri(CALLBACK_URL).build();
-    System.out.println("Paste this url in your browser: \n" + authorizeUrl + '\n');
+    System.out.printf("Paste this url in your browser:%n%s%n", authorizeUrl);
 
     // Wait for the authorization code.
     System.out.println("Type the code you received here: ");
+    @SuppressWarnings("DefaultCharset") // Reading from stdin, so default charset is appropriate.
     String authorizationCode = new BufferedReader(new InputStreamReader(System.in)).readLine();
 
     // Authorize the OAuth2 token.
@@ -110,7 +109,7 @@ public class AdvancedCreateCredentialFromScratch {
         new JacksonFactory(),
         CLIENT_ID,
         CLIENT_SECRET,
-        Lists.newArrayList(SCOPE))
+        Arrays.asList(SCOPE))
         .setDataStoreFactory(storeFactory).build();
 
     // Load the credential.
@@ -131,7 +130,7 @@ public class AdvancedCreateCredentialFromScratch {
     // Gets the current network.
     Network network = networkService.getCurrentNetwork();
 
-    System.out.printf("Current network has network code \"%s\" and display name \"%s\".\n",
+    System.out.printf("Current network has network code '%s' and display name '%s'.%n",
         network.getNetworkCode(), network.getDisplayName());
   }
 
@@ -139,12 +138,12 @@ public class AdvancedCreateCredentialFromScratch {
     if (CLIENT_ID.equals("INSERT_CLIENT_ID_HERE")
         || CLIENT_SECRET.equals("INSERT_CLIENT_SECRET_HERE")) {
       throw new IllegalArgumentException("Please input your client IDs or secret. "
-          + "See https://code.google.com/apis/console#access");
+          + "See https://console.developers.google.com/project");
     }
 
     // It is highly recommended that you use a credential store in your
     // application to store a per-user Credential.
-    // See: https://code.google.com/p/google-oauth-java-client/wiki/OAuth2
+    // See: https://developers.google.com/api-client-library/java/google-api-java-client/oauth2#data_store
     DataStoreFactory storeFactory = new MemoryDataStoreFactory();
 
     // Authorize and store your credential.

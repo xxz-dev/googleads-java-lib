@@ -21,7 +21,6 @@ import com.google.api.ads.adwords.lib.client.AdWordsServiceDescriptor;
 import com.google.api.ads.adwords.lib.client.AdWordsSession;
 import com.google.api.ads.adwords.lib.factory.helper.testing.foobar.cm.BadPackageService;
 import com.google.api.ads.common.lib.conf.AdsLibConfiguration;
-import com.google.api.ads.common.lib.exception.ServiceException;
 import com.google.api.ads.common.lib.factory.FactoryModule.AdsServiceClientFactoryInterface;
 import com.google.api.ads.common.lib.factory.FactoryModule.AdsServiceDescriptorFactoryInterface;
 import com.google.api.ads.common.lib.soap.SoapClientHandlerInterface;
@@ -38,8 +37,6 @@ import org.mockito.MockitoAnnotations;
 
 /**
  * Test for {@link AdWordsServiceClientFactoryHelper}.
- *
- * @author Kevin Winter
  */
 @RunWith(JUnit4.class)
 public class AdWordsServiceClientFactoryHelperTest {
@@ -50,12 +47,10 @@ public class AdWordsServiceClientFactoryHelperTest {
   @Mock
   private AdsServiceDescriptorFactoryInterface<AdWordsServiceDescriptor>
       adsServiceDescriptorFactory;
-  @SuppressWarnings({"rawtypes", "unchecked"}) /* Due to problem with guice binding */
-  @Mock
-  private SoapClientHandlerInterface soapClientHandler;
+  @Mock /* The type argument for SoapClientHandlerInterface does not matter for this test. */
+  private SoapClientHandlerInterface<Object> soapClientHandler;
   @Mock
   private AdsLibConfiguration adsLibConfiguration;
-  private AdWordsSession adWordsSession;
 
   @Before
   public void setup() {
@@ -67,8 +62,8 @@ public class AdWordsServiceClientFactoryHelperTest {
     AdWordsServiceClientFactoryHelper helper = new AdWordsServiceClientFactoryHelper(
         adsServiceClientFactory, adsServiceDescriptorFactory, soapClientHandler,
         adsLibConfiguration);
-    assertEquals("v201309", helper.determineVersion(
-        com.google.api.ads.adwords.lib.factory.helper.testing.v201309.cm.TestService.class));
+    assertEquals("v201406", helper.determineVersion(
+        com.google.api.ads.adwords.lib.factory.helper.testing.v201406.cm.TestService.class));
   }
 
   @Test
@@ -80,23 +75,6 @@ public class AdWordsServiceClientFactoryHelperTest {
     assertEquals("BadPackage", helper.determineVersion(BadPackageService.class));
   }
 
-
-  @Test(expected = ServiceException.class)
-  public void testCheckServiceClientPreconditions_clientLoginDeprecated() throws Exception {
-    AdWordsServiceClientFactoryHelper helper = new AdWordsServiceClientFactoryHelper(
-        adsServiceClientFactory, adsServiceDescriptorFactory, soapClientHandler,
-        adsLibConfiguration);
-
-    AdWordsSession adWordsSession = new AdWordsSession.Builder()
-        .withUserAgent("FooBar")
-        .withClientLoginToken("clientLoginToken")
-        .withEndpoint("https://www.google.com")
-        .withDeveloperToken("developerToken")
-        .build();
-
-    helper.checkServiceClientPreconditions(adWordsSession,
-        com.google.api.ads.adwords.lib.factory.helper.testing.v201402.cm.TestService.class);
-  }
 
   @Test
   public void testCheckServiceClientPreconditions_passOAuth2() throws Exception {
@@ -114,23 +92,6 @@ public class AdWordsServiceClientFactoryHelperTest {
         .build();
 
     helper.checkServiceClientPreconditions(adWordsSession,
-        com.google.api.ads.adwords.lib.factory.helper.testing.v201402.cm.TestService.class);
-  }
-
-  @Test
-  public void testCheckServiceClientPreconditions_passClientLoginOldVersion() throws Exception {
-    AdWordsServiceClientFactoryHelper helper = new AdWordsServiceClientFactoryHelper(
-        adsServiceClientFactory, adsServiceDescriptorFactory, soapClientHandler,
-        adsLibConfiguration);
-
-    AdWordsSession adWordsSession = new AdWordsSession.Builder()
-        .withUserAgent("FooBar")
-        .withClientLoginToken("clientLoginToken")
-        .withEndpoint("https://www.google.com")
-        .withDeveloperToken("developerToken")
-        .build();
-
-    helper.checkServiceClientPreconditions(adWordsSession,
-        com.google.api.ads.adwords.lib.factory.helper.testing.v201309.cm.TestService.class);
+        com.google.api.ads.adwords.lib.factory.helper.testing.v201406.cm.TestService.class);
   }
 }

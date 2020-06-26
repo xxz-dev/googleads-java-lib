@@ -14,32 +14,50 @@
 
 package com.google.api.ads.common.lib.soap.jaxws.testing.mocks;
 
+import static org.mockito.Mockito.when;
+
+import com.google.api.ads.common.lib.soap.RequestInfoXPathSet;
+import com.google.api.ads.common.lib.soap.ResponseInfoXPathSet;
 import com.google.api.ads.common.lib.soap.jaxws.JaxWsHandler;
 import com.google.api.ads.common.lib.soap.jaxws.JaxWsSoapContextHandler;
-
+import com.google.common.collect.Lists;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-
 import javax.xml.ws.Binding;
 import javax.xml.ws.BindingProvider;
 import javax.xml.ws.EndpointReference;
 import javax.xml.ws.handler.Handler;
+import org.mockito.Mockito;
 
 /**
  * Mock of a JAX-WS web service interface implementation. Used to test
  * {@link JaxWsHandler#createSoapClient(com.google.api.ads.common.lib.soap.SoapServiceDescriptor)}.
- *
- * @author Joseph DiLallo
  */
 public class CampaignServiceInterfaceImpl implements CampaignServiceInterface {
 
   public static String endpointAddress = "http://abcdefg";
-  private Binding binding = new MyBinding();
-  private Map<String, Object> requestContext = new HashMap<String, Object>()
-      {{ put(BindingProvider.ENDPOINT_ADDRESS_PROPERTY, endpointAddress); }};
+  
+  private Binding binding;
+  private Map<String, Object> requestContext =
+      new HashMap<String, Object>() {
+        {
+          put(BindingProvider.ENDPOINT_ADDRESS_PROPERTY, endpointAddress);
+        }
+      };
 
+  @SuppressWarnings("rawtypes")
+  public CampaignServiceInterfaceImpl() {
+    binding = Mockito.mock(Binding.class);
+    RequestInfoXPathSet requestInfoXPathSet = Mockito.mock(RequestInfoXPathSet.class);
+    ResponseInfoXPathSet responseInfoXPathSet = Mockito.mock(ResponseInfoXPathSet.class);
+    List<Handler> handlerList =
+        Lists.<Handler>newArrayList(
+            new JaxWsSoapContextHandler(requestInfoXPathSet, responseInfoXPathSet));
+    when(binding.getHandlerChain()).thenReturn(handlerList);
+  }
+  
+  @Override
   public String getTestMessage() {
     return "Here!";
   }
@@ -48,6 +66,7 @@ public class CampaignServiceInterfaceImpl implements CampaignServiceInterface {
    * Unused in this mock.
    * @see javax.xml.ws.BindingProvider#getRequestContext()
    */
+  @Override
   public Map<String, Object> getRequestContext() {
     return requestContext;
   }
@@ -56,6 +75,7 @@ public class CampaignServiceInterfaceImpl implements CampaignServiceInterface {
    * Unused in this mock.
    * @see javax.xml.ws.BindingProvider#getResponseContext()
    */
+  @Override
   public Map<String, Object> getResponseContext() {
     return null;
   }
@@ -63,6 +83,7 @@ public class CampaignServiceInterfaceImpl implements CampaignServiceInterface {
   /**
    * @see javax.xml.ws.BindingProvider#getBinding()
    */
+  @Override
   public Binding getBinding() {
     return binding;
   }
@@ -71,6 +92,7 @@ public class CampaignServiceInterfaceImpl implements CampaignServiceInterface {
    * Unused in this mock.
    * @see javax.xml.ws.BindingProvider#getEndpointReference()
    */
+  @Override
   public EndpointReference getEndpointReference() {
     return null;
   }
@@ -79,48 +101,8 @@ public class CampaignServiceInterfaceImpl implements CampaignServiceInterface {
    * Unused in this mock.
    * @see javax.xml.ws.BindingProvider#getEndpointReference(java.lang.Class)
    */
+  @Override
   public <T extends EndpointReference> T getEndpointReference(Class<T> clazz) {
     return null;
-  }
-
-  /**
-   * Mock of a {@link Binding} implementation. Used to test
-   * {@link
-   * JaxWsHandler#createSoapClient(com.google.api.ads.common.lib.soap.SoapServiceDescriptor)}.
-   *
-   * @author Joseph DiLallo
-   */
-  private static class MyBinding implements Binding {
-
-    private List<Handler> chain = new LinkedList<Handler>();
-
-    /**
-     * Constructor.
-     */
-    public MyBinding() {
-      chain.add(new JaxWsSoapContextHandler());
-    }
-
-    /**
-     * @see javax.xml.ws.Binding#getHandlerChain()
-     */
-    public List<Handler> getHandlerChain() {
-      return chain;
-    }
-
-    /**
-     * Unused in this mock.
-     * @see javax.xml.ws.Binding#setHandlerChain(java.util.List)
-     */
-    public void setHandlerChain(List<Handler> chain) {
-    }
-
-    /**
-     * Unused in this mock.
-     * @see javax.xml.ws.Binding#getBindingID()
-     */
-    public String getBindingID() {
-      return null;
-    }
   }
 }

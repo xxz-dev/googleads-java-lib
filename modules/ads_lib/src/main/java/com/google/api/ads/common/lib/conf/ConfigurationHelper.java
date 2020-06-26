@@ -17,9 +17,17 @@ package com.google.api.ads.common.lib.conf;
 import com.google.api.ads.common.lib.utils.logging.AdsServiceLoggers;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
+import com.google.common.base.MoreObjects;
 import com.google.common.base.Throwables;
 import com.google.common.collect.Lists;
-
+import java.io.File;
+import java.net.URL;
+import java.security.AccessControlException;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Properties;
+import javax.annotation.Nullable;
 import org.apache.commons.configuration.AbstractConfiguration;
 import org.apache.commons.configuration.CombinedConfiguration;
 import org.apache.commons.configuration.Configuration;
@@ -28,21 +36,8 @@ import org.apache.commons.configuration.MapConfiguration;
 import org.apache.commons.configuration.PropertiesConfiguration;
 import org.apache.commons.configuration.tree.OverrideCombiner;
 
-import java.io.File;
-import java.net.URL;
-import java.security.AccessControlException;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Properties;
-
-import javax.annotation.Nullable;
-
 /**
  * Helper class that loads {@link Configuration} from various sources.
- *
- * @author Kevin Winter
- * @author Jeff Sham
- * @author Adam Rogal
  */
 public class ConfigurationHelper {
 
@@ -57,9 +52,11 @@ public class ConfigurationHelper {
    * @returns properties loaded from the specified path or null.
    */
   public Configuration fromFile(String path) throws ConfigurationLoadException {
-    PropertiesConfiguration propertiesConfiguration = new PropertiesConfiguration();
+    PropertiesConfiguration propertiesConfiguration =
+        setupConfiguration(new PropertiesConfiguration());
+    propertiesConfiguration.setFileName(path);
     try {
-      propertiesConfiguration.load(path);
+      propertiesConfiguration.load();
     } catch (ConfigurationException e) {
       if (Throwables.getRootCause(e) instanceof AccessControlException){
         AdsServiceLoggers.ADS_API_LIB_LOG.debug("Properties could not be loaded.", e);
@@ -80,8 +77,11 @@ public class ConfigurationHelper {
    * @returns properties loaded from the specified path or null.
    */
   public Configuration fromFile(File path) throws ConfigurationLoadException {
+    PropertiesConfiguration configuration = setupConfiguration(new PropertiesConfiguration());
+    configuration.setFile(path);
     try {
-      return new PropertiesConfiguration(path);
+      configuration.load();
+      return configuration;
     } catch (ConfigurationException e) {
       throw new ConfigurationLoadException(
           "Encountered a problem reading the provided configuration file \"" + path + "\"!", e);
@@ -97,8 +97,11 @@ public class ConfigurationHelper {
    * @returns properties loaded from the specified path or null.
    */
   public Configuration fromFile(URL path) throws ConfigurationLoadException {
+    PropertiesConfiguration configuration = setupConfiguration(new PropertiesConfiguration());
+    configuration.setURL(path);
     try {
-      return new PropertiesConfiguration(path);
+      configuration.load();
+      return configuration;
     } catch (ConfigurationException e) {
       throw new ConfigurationLoadException(
           "Encountered a problem reading the provided configuration file \"" + path + "\"!", e);
@@ -109,7 +112,12 @@ public class ConfigurationHelper {
    * Loads configuration from system defined arguments, i.e. -Dapi.x.y.z=abc.
    */
   public Configuration fromSystem() {
-    return new MapConfiguration((Properties) System.getProperties().clone());
+    MapConfiguration mapConfig =
+        setupConfiguration(new MapConfiguration((Properties) System.getProperties().clone()));
+    // Disables trimming so system properties that include whitespace (such as line.separator) will
+    // be preserved.
+    mapConfig.setTrimmingDisabled(true);
+    return mapConfig;
   }
 
   /**
@@ -127,7 +135,8 @@ public class ConfigurationHelper {
   public CombinedConfiguration createCombinedConfiguration(
       @Nullable List<ConfigurationInfo<String>> paths,
       @Nullable List<ConfigurationInfo<URL>> urls) throws ConfigurationLoadException {
-    CombinedConfiguration combinedConfiguration = new CombinedConfiguration(new OverrideCombiner());
+    CombinedConfiguration combinedConfiguration =
+        setupConfiguration(new CombinedConfiguration(new OverrideCombiner()));
 
     // System configuration will override all other configurations.
     addConfiguration(combinedConfiguration, fromSystem());
@@ -142,8 +151,12 @@ public class ConfigurationHelper {
             if (!path.isOptional) {
               throw e;
             } else {
-              AdsServiceLoggers.ADS_API_LIB_LOG.debug("Did not load optional configuration "
-                  + path.getLocation() + ":", e);
+              // Intentionally exclude the exception details from this log message because:
+              // a) The path is optional, so it's not unusual for the resource to be missing.
+              // b) Logging the exception details was needlessly alarming users. See github issue:
+              //    https://github.com/googleads/googleads-java-lib/issues/90
+              AdsServiceLoggers.ADS_API_LIB_LOG.debug(
+                  "Could not load optional configuration: " + path);
             }
           }
         }
@@ -179,21 +192,25 @@ public class ConfigurationHelper {
     if (configuration instanceof AbstractConfiguration) {
       combinedConfiguration.addConfiguration((AbstractConfiguration) configuration);
     } else {
-      combinedConfiguration.addConfiguration(new AbstractConfiguration() {
+      combinedConfiguration.addConfiguration(setupConfiguration(new AbstractConfiguration() {
 
+        @Override
         public boolean isEmpty() {
           return configuration.isEmpty();
         }
 
+        @Override
         public Object getProperty(String key) {
           return configuration.getProperty(key);
         }
 
+        @Override
         @SuppressWarnings("rawtypes") // No rawtype in class.
         public Iterator getKeys() {
           return configuration.getKeys();
         }
 
+        @Override
         public boolean containsKey(String key) {
           return configuration.containsKey(key);
         }
@@ -202,7 +219,7 @@ public class ConfigurationHelper {
         protected void addPropertyDirect(String key, Object value) {
           configuration.addProperty(key, value);
         }
-      });
+      }));
     }
   }
 
@@ -220,6 +237,7 @@ public class ConfigurationHelper {
     }
 
     return Lists.transform(locations, new Function<T, ConfigurationInfo<T>>() {
+      @Override
       public ConfigurationInfo<T> apply(T input) {
         return new ConfigurationInfo<T>(input, isOptional);
       }
@@ -227,19 +245,32 @@ public class ConfigurationHelper {
   }
 
   /**
-   * Creates a list of configuration infos from the locations and if they are
+   * Creates a list of configuration infos from the single location and if they are
    * optional.
    *
    * @param <T> the type of location. Only {@code String} and {@code URL} are
    *            supported.
    */
-  public static <T> List<ConfigurationInfo<T>> newList(boolean isOptional, T... locations) {
-    if (locations == null) {
-      throw new IllegalArgumentException("locations cannot be null");
+  public static <T> List<ConfigurationInfo<T>> newList(boolean isOptional, T location) {
+    if (location == null) {
+      throw new IllegalArgumentException("location cannot be null");
     }
-    return newList(Lists.<T>newArrayList(locations), isOptional);
+    return newList(Collections.<T>singletonList(location), isOptional);
   }
 
+  /**
+   * Sets attributes of the configuration to common values. Pass any Configuration objects
+   * created by this helper to this method to ensure consistency.
+   *  
+   * @param configuration the new configuration to set up
+   * @return the same configuration that was passed, updated with common attribute values
+   */
+  private <C extends AbstractConfiguration> C setupConfiguration(C configuration) {
+    configuration.setListDelimiter(',');
+    configuration.setDelimiterParsingDisabled(false);
+    return configuration;
+  }
+  
   /**
    * Information about the configuration.
 
@@ -275,6 +306,14 @@ public class ConfigurationHelper {
 
     public boolean isOptional() {
       return isOptional;
+    }
+    
+    @Override
+    public String toString() {
+      return MoreObjects.toStringHelper(getClass())
+          .add("location", location)
+          .add("isOptional", isOptional)
+          .toString();
     }
   }
 }

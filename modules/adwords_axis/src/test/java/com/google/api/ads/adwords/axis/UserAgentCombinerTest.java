@@ -26,14 +26,12 @@ import org.junit.runners.JUnit4;
 
 /**
  * Tests for {@link UserAgentCombiner} with AdWords and Axis.
- *
- * @author Adam Rogal
  */
 @RunWith(JUnit4.class)
 public class UserAgentCombinerTest {
 
   private static final String USER_AGENT =
-      "userAgent (AwApi-Java, AdWords-Axis/1.26.0, Common-Java/1.26.0, Axis/1.4, Java/"
+      "userAgent (AwApi-Java, AdWords-Axis/3.13.0, Common-Java/3.13.0, Axis/1.4, Java/"
           + System.getProperty("java.version") + ", maven)";
 
   /**

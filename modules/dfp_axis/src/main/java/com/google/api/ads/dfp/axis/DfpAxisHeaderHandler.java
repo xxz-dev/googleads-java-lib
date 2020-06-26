@@ -15,34 +15,36 @@
 package com.google.api.ads.dfp.axis;
 
 import com.google.api.ads.common.lib.client.HeaderHandler;
+import com.google.api.ads.common.lib.conf.AdsLibConfiguration;
 import com.google.api.ads.common.lib.exception.AuthenticationException;
 import com.google.api.ads.common.lib.exception.ServiceException;
 import com.google.api.ads.common.lib.soap.AuthorizationHeaderHandler;
-import com.google.api.ads.common.lib.soap.SoapClientHandlerInterface;
+import com.google.api.ads.common.lib.soap.axis.AxisHandler;
 import com.google.api.ads.common.lib.useragent.UserAgentCombiner;
 import com.google.api.ads.dfp.lib.client.DfpServiceDescriptor;
 import com.google.api.ads.dfp.lib.client.DfpSession;
 import com.google.api.ads.dfp.lib.conf.DfpApiConfiguration;
 import com.google.api.ads.dfp.lib.soap.DfpHttpHeaderHandler;
-import com.google.common.annotations.VisibleForTesting;
-import com.google.inject.Inject;
+import com.google.common.base.Preconditions;
 
+import org.apache.axis.client.Stub;
 import org.apache.commons.beanutils.BeanUtils;
 
 import java.lang.reflect.InvocationTargetException;
 
+import javax.inject.Inject;
+
 /**
  * DFP implementation of {@link HeaderHandler}.
- *
- * @author Adam Rogal
  */
 public class DfpAxisHeaderHandler implements HeaderHandler<DfpSession, DfpServiceDescriptor> {
 
-  private final SoapClientHandlerInterface<Object> soapClientHandler;
+  private final AxisHandler soapClientHandler;
   private final DfpApiConfiguration dfpApiConfiguration;
   private final AuthorizationHeaderHandler authorizationHeaderHandler;
   private final DfpHttpHeaderHandler dfpHttpHeaderHandler;
   private final UserAgentCombiner userAgentCombiner;
+  private final AdsLibConfiguration adsLibConfiguration;
 
   /**
    * Constructor.
@@ -53,18 +55,17 @@ public class DfpAxisHeaderHandler implements HeaderHandler<DfpSession, DfpServic
    * @param dfpHttpHeaderHandler the DFP HTTP header handler
    * @param userAgentCombiner the full user agent provider
    */
-  @SuppressWarnings("unchecked") // All generics of SoapClientHandlerInterface
-                                 // extend Object.
   @Inject
   public DfpAxisHeaderHandler(
-      @SuppressWarnings("rawtypes") /* Due to problem with guice binding */
-      SoapClientHandlerInterface soapClientHandler,
+      AxisHandler soapClientHandler,
       DfpApiConfiguration dfpApiConfiguration,
+      AdsLibConfiguration adsLibConfiguration,
       AuthorizationHeaderHandler authorizationHeaderHandler,
       DfpHttpHeaderHandler dfpHttpHeaderHandler,
       UserAgentCombiner userAgentCombiner) {
     this.soapClientHandler = soapClientHandler;
     this.dfpApiConfiguration = dfpApiConfiguration;
+    this.adsLibConfiguration = adsLibConfiguration;
     this.authorizationHeaderHandler = authorizationHeaderHandler;
     this.dfpHttpHeaderHandler = dfpHttpHeaderHandler;
     this.userAgentCombiner = userAgentCombiner;
@@ -75,10 +76,15 @@ public class DfpAxisHeaderHandler implements HeaderHandler<DfpSession, DfpServic
    *      com.google.api.ads.common.lib.client.AdsSession,
    *      com.google.api.ads.common.lib.client.AdsServiceDescriptor)
    */
+  @Override
   public void setHeaders(Object soapClient, DfpSession dfpSession,
       DfpServiceDescriptor dfpServiceDescriptor) throws AuthenticationException,
       ServiceException {
     try {
+      Preconditions.checkArgument(
+          soapClient instanceof Stub, "soapClient must be Stub but was: %s", soapClient);
+      Stub stub = (Stub) soapClient;
+      
       dfpHttpHeaderHandler.setHttpHeaders(soapClient, dfpSession);
 
       Object soapHeader = createSoapHeader(dfpServiceDescriptor);
@@ -89,12 +95,14 @@ public class DfpAxisHeaderHandler implements HeaderHandler<DfpSession, DfpServic
         BeanUtils.setProperty(soapHeader, "networkCode", dfpSession.getNetworkCode());
       }
 
-      setAuthenticationHeaders(dfpServiceDescriptor, soapClient, soapHeader, dfpSession);
+      setAuthenticationHeaders(soapClient, dfpSession);
 
       String namespace =
           dfpApiConfiguration.getNamespacePrefix() + "/"
               + dfpServiceDescriptor.getVersion();
-      soapClientHandler.setHeader(soapClient, namespace, "RequestHeader", soapHeader);
+      soapClientHandler.setHeader(stub, namespace, "RequestHeader", soapHeader);
+      soapClientHandler.setCompression(stub, adsLibConfiguration.isCompressionEnabled());
+      soapClientHandler.setRequestTimeout(stub, adsLibConfiguration.getSoapRequestTimeout());
     } catch (InstantiationException e) {
       throw new ServiceException("Unexpected exception.", e);
     } catch (IllegalAccessException e) {
@@ -113,37 +121,17 @@ public class DfpAxisHeaderHandler implements HeaderHandler<DfpSession, DfpServic
   /**
    * Sets the authentication headers.
    *
-   * @param dfpServiceDescriptor the DFP service descriptor
    * @param soapClient the SOAP client
-   * @param soapHeader the SOAP header
    * @param dfpSession the DFP session
    * @throws AuthenticationException if there was a problem getting/setting the
    *     authorization header
    * @throws IllegalArgumentException if there was a problem setting the header
    */
-  @VisibleForTesting
-  void setAuthenticationHeaders(DfpServiceDescriptor dfpServiceDescriptor, Object soapClient,
-      Object soapHeader, DfpSession dfpSession) throws AuthenticationException {
-    if (dfpSession.getClientLoginToken() != null) {
-      try {
-        BeanUtils.setProperty(soapHeader, "authentication",
-            createClientLoginObject(dfpServiceDescriptor, dfpSession));
-      } catch (SecurityException e) {
-        throw new IllegalArgumentException("Could not set the header.", e);
-      } catch (IllegalAccessException e) {
-        throw new IllegalArgumentException("Could not set the header.", e);
-      } catch (InvocationTargetException e) {
-        throw new IllegalArgumentException("Could not set the header.", e);
-      } catch (InstantiationException e) {
-        throw new IllegalArgumentException("Could not set the header.", e);
-      } catch (NoSuchMethodException e) {
-        throw new IllegalArgumentException("Could not set the header.", e);
-      } catch (ClassNotFoundException e) {
-        throw new IllegalArgumentException("Could not set the header.", e);
-      }
-    } else {
-      authorizationHeaderHandler.setAuthorization(soapClient, dfpSession);
-    }
+  private void setAuthenticationHeaders(
+      Object soapClient,
+      DfpSession dfpSession)
+      throws AuthenticationException {
+    authorizationHeaderHandler.setAuthorization(soapClient, dfpSession);
   }
 
   /**
@@ -157,42 +145,9 @@ public class DfpAxisHeaderHandler implements HeaderHandler<DfpSession, DfpServic
    * @throws InstantiationException if the SOAP header class could not be
    *         created
    */
-  @VisibleForTesting
-  Object createSoapHeader(DfpServiceDescriptor adsServiceDescriptor)
+  private Object createSoapHeader(DfpServiceDescriptor adsServiceDescriptor)
       throws InstantiationException, IllegalAccessException, ClassNotFoundException {
     return Class.forName(adsServiceDescriptor.getInterfaceClass().getPackage().getName()
         + ".SoapRequestHeader").newInstance();
-  }
-
-  /**
-   * Creates a SOAP header.
-   *
-   * @param dfpServiceDescriptor the ads service descriptor
-   * @return the instantiated SOAP header
-   * @throws ClassNotFoundException if the client login class could not be found
-   * @throws IllegalAccessException if the client login class could not be
-   *         created
-   * @throws InstantiationException if the client login class could not be
-   *         created
-   * @throws NoSuchMethodException if the client login class could not be
-   *         created
-   * @throws InvocationTargetException if the client login class could not be
-   *         created
-   * @throws SecurityException if the client login class could not be
-   *         created
-   * @throws IllegalArgumentException if the client login class could not be
-   *         created
-   */
-  @VisibleForTesting
-  Object createClientLoginObject(DfpServiceDescriptor dfpServiceDescriptor, DfpSession dfpSession)
-      throws InstantiationException, IllegalAccessException, ClassNotFoundException,
-      IllegalArgumentException, SecurityException, InvocationTargetException,
-      NoSuchMethodException {
-    Class<?> interfaceClass = dfpServiceDescriptor.getInterfaceClass();
-    String packageName = interfaceClass.getPackage().getName();
-    Class<?> clientLoginClass = Class.forName(packageName + "." + "ClientLogin");
-
-    return clientLoginClass.getConstructor(String.class, String.class).newInstance(null,
-        dfpSession.getClientLoginToken());
   }
 }

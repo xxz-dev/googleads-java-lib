@@ -20,30 +20,23 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.google.api.ads.common.lib.client.RemoteCallReturn;
 import com.google.api.ads.common.lib.exception.ServiceException;
+import com.google.api.ads.common.lib.soap.RequestInfoXPathSet;
+import com.google.api.ads.common.lib.soap.ResponseInfoXPathSet;
 import com.google.api.ads.common.lib.soap.SoapCall;
-import com.google.api.ads.common.lib.soap.SoapCallReturn;
 import com.google.api.ads.common.lib.soap.SoapServiceDescriptor;
 import com.google.api.ads.common.lib.soap.jaxws.testing.mocks.CampaignServiceInterface;
 import com.google.api.ads.common.lib.soap.jaxws.testing.mocks.CampaignServiceInterfaceImpl;
 import com.google.api.ads.common.lib.soap.jaxws.testing.mocks.MockJaxWsCompatibleDescriptor;
 import com.google.common.collect.Lists;
-
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
-import org.mockito.Mock;
-import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
-
+import com.google.inject.Provider;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-
 import javax.xml.namespace.QName;
 import javax.xml.soap.SOAPElement;
 import javax.xml.soap.SOAPFactory;
@@ -51,11 +44,18 @@ import javax.xml.ws.Binding;
 import javax.xml.ws.BindingProvider;
 import javax.xml.ws.handler.Handler;
 import javax.xml.ws.handler.MessageContext;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 
 /**
  * SOAP Client Handler implementation for use with JAX-WS.
- *
- * @author Joseph DiLallo
  */
 @RunWith(JUnit4.class)
 public class JaxWsHandlerTest {
@@ -66,11 +66,15 @@ public class JaxWsHandlerTest {
                                 // which returns a list of raw Handlers.
   private List<Handler> handlerChain;
   private JaxWsSoapContextHandler contextHandler;
-  @Mock private JaxWsSoapContextHandlerFactory handlerFactory;
+  @Mock private Provider<JaxWsSoapContextHandler> handlerFactory;
   @Mock private BindingProvider mockSoapClient;
   @Mock private Binding mockBinding;
   @Mock private Map<String, Object> mockRequestContext;
+  @Mock private RequestInfoXPathSet requestInfoXPathSet;
+  @Mock private ResponseInfoXPathSet responseInfoXPathSet;
 
+  @Rule public ExpectedException thrown = ExpectedException.none();
+  
   public JaxWsHandlerTest() {}
 
   @SuppressWarnings({"unchecked", "rawtypes"})
@@ -78,8 +82,8 @@ public class JaxWsHandlerTest {
   public void setUp() {
     MockitoAnnotations.initMocks(this);
 
-    contextHandler = new JaxWsSoapContextHandler();
-    when(handlerFactory.getJaxWsSoapContextHandler()).thenReturn(contextHandler);
+    contextHandler = new JaxWsSoapContextHandler(requestInfoXPathSet, responseInfoXPathSet);
+    when(handlerFactory.get()).thenReturn(contextHandler);
     handlerChain = new LinkedList<Handler>();
     handlerChain.add(contextHandler);
     jaxWsHandler = new JaxWsHandler(handlerFactory);
@@ -94,8 +98,9 @@ public class JaxWsHandlerTest {
     assertTrue(provider.getBinding().getHandlerChain().get(0) instanceof JaxWsSoapContextHandler);
   }
 
-  @Test(expected = ServiceException.class)
+  @Test
   public void testCreateSoapClient_notJaxWsCompatible() {
+    thrown.expect(ServiceException.class);
     jaxWsHandler.createSoapClient(Mockito.mock(SoapServiceDescriptor.class));
   }
 
@@ -107,7 +112,7 @@ public class JaxWsHandlerTest {
     SoapCall<BindingProvider> soapCall = new SoapCall<BindingProvider>(
         soapCallMethod, soapClient, new Object[0]);
 
-    SoapCallReturn returnedValue = jaxWsHandler.invokeSoapCall(soapCall);
+    RemoteCallReturn returnedValue = jaxWsHandler.invokeSoapCall(soapCall);
 
     assertEquals("Here!", returnedValue.getReturnValue());
     assertEquals(null, returnedValue.getException());
@@ -148,12 +153,13 @@ public class JaxWsHandlerTest {
         contextHandler.getAddedHeaders());
   }
 
-  @Test(expected = ServiceException.class)
+  @Test
   public void testSetHeader_fail() {
     String namespace = "namespace";
     String headerName = "headerName";
     Object headerValue = new Object();
 
+    thrown.expect(ServiceException.class);
     jaxWsHandler.setHeader(mockSoapClient, namespace, headerName, headerValue);
   }
 
@@ -198,11 +204,12 @@ public class JaxWsHandlerTest {
    * {@link JaxWsHandler#setHeaderChildString(BindingProvider, String, String, String, String)} when
    * no headers exist (setHeader never called).
    */
-  @Test(expected = NullPointerException.class)
+  @Test
   public void testSetHeaderChildString_fail_noParents() throws Exception {
     when(mockSoapClient.getBinding()).thenReturn(mockBinding);
     when(mockBinding.getHandlerChain()).thenReturn(handlerChain);
 
+    thrown.expect(NullPointerException.class);
     jaxWsHandler.setHeaderChildString(mockSoapClient, "nonexistentParentName", "childNamespace",
         "childName", "childValue");
   }
@@ -212,7 +219,7 @@ public class JaxWsHandlerTest {
    * {@link JaxWsHandler#setHeaderChildString(BindingProvider, String, String, String, String)} when
    * headers exist but the parent header name passed does not match any of them.
    */
-  @Test(expected = NullPointerException.class)
+  @Test
   public void testSetHeaderChildString_fail_noMatchingParent() throws Exception {
     String parentNamespace = "parentNamespace";
     String parentName = "parentName";
@@ -226,6 +233,7 @@ public class JaxWsHandlerTest {
     jaxWsHandler.setHeader(mockSoapClient, parentNamespace, parentName, parentHeader);
 
     // Add the child header but specify a non-existent parent header name.
+    thrown.expect(NullPointerException.class);
     jaxWsHandler.setHeaderChildString(mockSoapClient, parentName + "_nonexistent", "childNamespace",
         "childName", "childValue");
   }
@@ -315,8 +323,20 @@ public class JaxWsHandlerTest {
     assertEquals(headerValue, jaxWsHandler.getHeader(mockSoapClient, headerName));
   }
 
-  @Test(expected = UnsupportedOperationException.class)
+  @Test
   public void testCreateSoapHeaderElement() {
+    thrown.expect(UnsupportedOperationException.class);
     jaxWsHandler.createSoapHeaderElement(new QName("website", "name"));
+  }
+  
+  @Test
+  public void testSetRequestTimeout() {
+    int timeout = 12345;
+    when(mockSoapClient.getRequestContext()).thenReturn(mockRequestContext);
+
+    jaxWsHandler.setRequestTimeout(mockSoapClient, timeout);
+    
+    verify(mockRequestContext).put("com.sun.xml.ws.request.timeout", timeout);
+    verify(mockRequestContext).put("com.sun.xml.internal.ws.request.timeout", timeout);   
   }
 }

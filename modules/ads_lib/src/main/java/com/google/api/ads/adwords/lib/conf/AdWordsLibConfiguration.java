@@ -15,15 +15,14 @@
 package com.google.api.ads.adwords.lib.conf;
 
 import com.google.api.ads.common.lib.conf.AdsLibConfiguration;
-import com.google.inject.Inject;
 import com.google.inject.name.Named;
 
 import org.apache.commons.configuration.Configuration;
 
+import javax.inject.Inject;
+
 /**
  * Configuration information for AdWords library.
- *
- * @author Adam Rogal
  */
 public class AdWordsLibConfiguration extends AdsLibConfiguration {
 
@@ -41,6 +40,7 @@ public class AdWordsLibConfiguration extends AdsLibConfiguration {
     super(config);
   }
 
+  @Override
   public boolean isAutoRefreshOAuth2TokenEnabled() {
     return config.getBoolean(KEY_PREFIX + "." + AUTO_REFRESH_OAUTH2_TOKEN_POSTFIX, true);
   }
@@ -53,4 +53,23 @@ public class AdWordsLibConfiguration extends AdsLibConfiguration {
     return config.getInt(
         KEY_PREFIX + "." + REPORT_DOWNLOAD_TIMEOUT_KEY, DEFAULT_REPORT_DOWNLOAD_TIMEOUT);
   }
+  
+  @Override
+  public boolean isCompressionEnabled() {
+    return config.getBoolean(KEY_PREFIX + "." + USE_COMPRESSION_POSTFIX, false);
+  }
+  
+  @Override
+  public int getSoapRequestTimeout() {
+    return config.getInt(
+        KEY_PREFIX + "." + SOAP_REQUEST_TIMEOUT_POSTFIX, DEFAULT_SOAP_REQUEST_TIMEOUT);
+  }
+
+  @Override
+  public boolean isIncludeAdsUtilitiesInUserAgent() {
+    Boolean isInclude = config.getBoolean(
+        KEY_PREFIX + "." + INCLUDE_UTILITIES_IN_USER_AGENT_POSTFIX, null);
+    return isInclude != null ? isInclude : super.isIncludeAdsUtilitiesInUserAgent();
+  }
+  
 }

@@ -29,8 +29,6 @@ import java.net.URL;
 
 /**
  * Builder for {@link GoogleClientSecrets}.
- *
- * @author Adam Rogal
  */
 public class GoogleClientSecretsBuilder {
 
@@ -38,7 +36,7 @@ public class GoogleClientSecretsBuilder {
    * Enum representing the API that GoogleClientSecretsBuilder can be used for.
    */
   public static enum Api {
-    ADWORDS("api.adwords."), DFA("api.dfa."), DFP("api.dfp.");
+    ADWORDS("api.adwords."), DFP("api.dfp.");
 
     private final String propKeyPrefix;
 
@@ -98,7 +96,7 @@ public class GoogleClientSecretsBuilder {
     /**
      * Sets the client ID & secret to create the OAuth2 Credential with. If you
      * do not have a client ID or secret, please create one in the API console:
-     * https://cloud.google.com/console
+     * https://console.developers.google.com
      */
     public GoogleClientSecretsForApiBuilder withClientSecrets(String clientId,
         String clientSecret) {
@@ -107,6 +105,7 @@ public class GoogleClientSecretsBuilder {
       return this;
     }
 
+    @Override
     public GoogleClientSecrets build() throws ValidationException {
       validate();
       Details details = new Details();
@@ -126,14 +125,14 @@ public class GoogleClientSecretsBuilder {
       if (Strings.isNullOrEmpty(clientId) || clientId.startsWith("INSERT_CLIENT_ID_HERE")) {
         throw new ValidationException(String.format(
             "Client ID must be set%s\nIf you do not have a client ID or secret, "
-            + "please create one in the API console: https://cloud.google.com/console",
+            + "please create one in the API console: https://console.developers.google.com",
             filePath != null ? generateFilePathWarning("clientId") : "."), "clientId");
       }
 
       if (Strings.isNullOrEmpty(clientSecret) || clientId.startsWith("INSERT_CLIENT_SECRET_HERE")) {
         throw new ValidationException(String.format(
             "Client secret must be set%s\nIf you do not have a client ID or secret, "
-            + "please create one in the API console: https://cloud.google.com/console",
+            + "please create one in the API console: https://console.developers.google.com",
             filePath != null ? generateFilePathWarning("clientSecret") : "."),
             "clientSecret");
       }
@@ -154,6 +153,7 @@ public class GoogleClientSecretsBuilder {
      * @param config the configuration
      * @return Builder populated from the Configuration
      */
+    @Override
     public GoogleClientSecretsForApiBuilder from(Configuration config) {
       clientId = config.getString(getPropertyKey("clientId"), null);
       clientSecret = config.getString(getPropertyKey("clientSecret"), null);
@@ -182,19 +182,23 @@ public class GoogleClientSecretsBuilder {
       return this;
     }
 
+    @Override
     public GoogleClientSecretsForApiBuilder fromFile(String path)
         throws ConfigurationLoadException {
       return from(configHelper.fromFile(path), path);
     }
 
+    @Override
     public GoogleClientSecretsForApiBuilder fromFile(File path) throws ConfigurationLoadException {
       return from(configHelper.fromFile(path), path.getAbsolutePath());
     }
 
+    @Override
     public GoogleClientSecretsForApiBuilder fromFile(URL path) throws ConfigurationLoadException {
       return from(configHelper.fromFile(path), path.toString());
     }
 
+    @Override
     public GoogleClientSecretsForApiBuilder fromFile() throws ConfigurationLoadException {
       return fromFile(com.google.api.ads.common.lib.utils.Builder.DEFAULT_CONFIGURATION_FILENAME);
     }

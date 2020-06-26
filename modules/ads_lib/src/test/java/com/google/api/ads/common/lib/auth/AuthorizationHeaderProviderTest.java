@@ -15,13 +15,11 @@
 package com.google.api.ads.common.lib.auth;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.google.api.ads.common.lib.client.AdsSession;
-import com.google.api.ads.common.lib.client.Endpoint;
 import com.google.api.ads.common.lib.conf.AdsLibConfiguration;
 import com.google.api.client.auth.oauth2.BearerToken;
 import com.google.api.client.auth.oauth2.Credential;
@@ -36,9 +34,6 @@ import org.mockito.MockitoAnnotations;
 
 /**
  * Tests for {@link AuthorizationHeaderProvider}.
- *
- * @author Adam Rogal
- * @author Joseph DiLallo
  */
 @RunWith(JUnit4.class)
 public class AuthorizationHeaderProviderTest {
@@ -63,6 +58,7 @@ public class AuthorizationHeaderProviderTest {
   public void testGetAuthorizationHeader_oAuth2Refresh() throws Exception {
     final Credential credential = new Credential(BearerToken.authorizationHeaderAccessMethod());
     AdsSession adsSession = new OAuth2Session() {
+      @Override
       public Credential getOAuth2Credential() {
         return credential;
       }
@@ -82,6 +78,7 @@ public class AuthorizationHeaderProviderTest {
   public void testGetAuthorizationHeader_oAuth2NoRefresh() throws Exception {
     final Credential credential = new Credential(BearerToken.authorizationHeaderAccessMethod());
     AdsSession adsSession = new OAuth2Session() {
+      @Override
       public Credential getOAuth2Credential() {
         return credential;
       }
@@ -97,50 +94,14 @@ public class AuthorizationHeaderProviderTest {
     verify(oAuth2Helper, times(0)).refreshCredential(credential);
   }
 
-  @Test
-  public void testGetAuthorizationHeader_ClientLogin() throws Exception {
-    final String clientLoginToken = "123";
-
-    AdsSession adsSession = new ClientLoginSession() {
-      public String getClientLoginToken() {
-        return clientLoginToken;
-      }
-    };
-
-    assertEquals(AuthorizationHeaderProvider.CLIENT_LOGIN_HEADER_PREFIX + clientLoginToken,
-        authorizationHeaderProvider.getAuthorizationHeader(adsSession, ENDPOINT_URL.toString()));
-  }
-
-  @Test
-  public void testGetAuthorizationHeader_ClientLoginNull() throws Exception {
-
-    AdsSession adsSession = new ClientLoginSession() {
-      public String getClientLoginToken() {
-        return null;
-      }
-    };
-
-    try {
-      authorizationHeaderProvider.getAuthorizationHeader(adsSession, ENDPOINT_URL.toString());
-      fail("Expected exception");
-    } catch (IllegalArgumentException e) {
-      assertEquals("Session does not have any valid authentication mechanisms", e.getMessage());
-    }
-  }
-
   private abstract class BaseAdsSession implements AdsSession {
 
+    @Override
     public String getEndpoint() {
       return null;
-    }
-
-    public boolean isEnvironment(Endpoint environment) {
-      return false;
     }
   }
 
   private abstract class OAuth2Session extends BaseAdsSession implements OAuth2Compatible {}
 
-  private abstract class ClientLoginSession extends BaseAdsSession
-      implements ClientLoginCompatible {}
 }

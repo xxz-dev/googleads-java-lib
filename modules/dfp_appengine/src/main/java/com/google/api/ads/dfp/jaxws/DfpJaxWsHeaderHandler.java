@@ -15,38 +15,37 @@
 package com.google.api.ads.dfp.jaxws;
 
 import com.google.api.ads.common.lib.client.HeaderHandler;
+import com.google.api.ads.common.lib.conf.AdsLibConfiguration;
 import com.google.api.ads.common.lib.exception.AuthenticationException;
 import com.google.api.ads.common.lib.exception.ServiceException;
 import com.google.api.ads.common.lib.soap.AuthorizationHeaderHandler;
-import com.google.api.ads.common.lib.soap.SoapClientHandlerInterface;
+import com.google.api.ads.common.lib.soap.jaxws.JaxWsHandler;
 import com.google.api.ads.common.lib.useragent.UserAgentCombiner;
 import com.google.api.ads.dfp.lib.client.DfpServiceDescriptor;
 import com.google.api.ads.dfp.lib.client.DfpSession;
 import com.google.api.ads.dfp.lib.conf.DfpApiConfiguration;
 import com.google.api.ads.dfp.lib.soap.DfpHttpHeaderHandler;
-import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
-import com.google.inject.Inject;
 
 import java.util.Map;
 
-import javax.xml.soap.Name;
+import javax.inject.Inject;
 import javax.xml.soap.SOAPElement;
 import javax.xml.soap.SOAPException;
 import javax.xml.soap.SOAPFactory;
+import javax.xml.ws.BindingProvider;
 
 /**
  * DFP implementation of {@link HeaderHandler} for JAX-WS.
- *
- * @author Joseph DiLallo
- * @author Jeff Sham
  */
 public class DfpJaxWsHeaderHandler implements HeaderHandler<DfpSession, DfpServiceDescriptor> {
 
   private static final String REQUEST_HEADER_LOCAL_PART = "RequestHeader";
 
-  private final SoapClientHandlerInterface<Object> soapClientHandler;
+  private final JaxWsHandler soapClientHandler;
   private final DfpApiConfiguration dfpApiConfiguration;
+  private final AdsLibConfiguration adsLibConfiguration;
   private final AuthorizationHeaderHandler authorizationHeaderHandler;
   private final DfpHttpHeaderHandler dfpHttpHeaderHandler;
   private final UserAgentCombiner userAgentCombiner;
@@ -59,18 +58,17 @@ public class DfpJaxWsHeaderHandler implements HeaderHandler<DfpSession, DfpServi
    * @param authorizationHeaderHandler the authorization header handler
    * @param userAgentCombiner the full user agent provider
    */
-  @SuppressWarnings("unchecked") // All generics of SoapClientHandlerInterface
-                                 // extend Object.
   @Inject
   public DfpJaxWsHeaderHandler(
-      @SuppressWarnings("rawtypes") /* Due to problem with guice binding */
-      SoapClientHandlerInterface soapClientHandler,
+      JaxWsHandler soapClientHandler,
       DfpApiConfiguration dfpApiConfiguration,
+      AdsLibConfiguration adsLibConfiguration,
       AuthorizationHeaderHandler authorizationHeaderHandler,
       DfpHttpHeaderHandler dfpHttpHeaderHandler,
       UserAgentCombiner userAgentCombiner) {
     this.soapClientHandler = soapClientHandler;
     this.dfpApiConfiguration = dfpApiConfiguration;
+    this.adsLibConfiguration = adsLibConfiguration;
     this.authorizationHeaderHandler = authorizationHeaderHandler;
     this.dfpHttpHeaderHandler = dfpHttpHeaderHandler;
     this.userAgentCombiner = userAgentCombiner;
@@ -80,34 +78,39 @@ public class DfpJaxWsHeaderHandler implements HeaderHandler<DfpSession, DfpServi
    * @see HeaderHandler#setHeaders(Object, com.google.api.ads.common.lib.client.AdsSession,
    *      com.google.api.ads.common.lib.client.AdsServiceDescriptor)
    */
+  @Override
   public void setHeaders(
       Object soapClient, DfpSession dfpSession, DfpServiceDescriptor dfpServiceDescriptor)
       throws AuthenticationException, ServiceException {
+    Preconditions.checkArgument(
+        soapClient instanceof BindingProvider,
+        "soapClient must be BindingProvider but was: %s",
+        soapClient);
+    BindingProvider bindingProvider = (BindingProvider) soapClient;
+
     dfpHttpHeaderHandler.setHttpHeaders(soapClient, dfpSession);
 
     Map<String, Object> headerData = readHeaderElements(dfpSession);
-    setAuthenticationHeaders(soapClient, headerData, dfpSession);
+    setAuthenticationHeaders(soapClient, dfpSession);
     soapClientHandler.setHeader(
-        soapClient, null, null, constructSoapHeader(headerData, dfpServiceDescriptor));
+        bindingProvider, null, null, constructSoapHeader(headerData, dfpServiceDescriptor));
+    soapClientHandler.setCompression(bindingProvider, adsLibConfiguration.isCompressionEnabled());
+    soapClientHandler.setRequestTimeout(
+        bindingProvider, adsLibConfiguration.getSoapRequestTimeout());
   }
 
   /**
    * Sets the authentication headers.
    *
    * @param soapClient the SOAP client
-   * @param headerElements the map housing header elements
    * @param dfpSession the DFP session
    * @throws AuthenticationException if there was a problem getting/setting the
    *         header
    */
-  @VisibleForTesting
-  void setAuthenticationHeaders(Object soapClient, Map<String, Object> headerElements,
-      DfpSession dfpSession) throws AuthenticationException {
-    if (dfpSession.getClientLoginToken() != null) {
-      headerElements.put("authentication", dfpSession.getClientLoginToken());
-    } else {
-      authorizationHeaderHandler.setAuthorization(soapClient, dfpSession);
-    }
+  private void setAuthenticationHeaders(
+      Object soapClient, DfpSession dfpSession)
+      throws AuthenticationException {
+    authorizationHeaderHandler.setAuthorization(soapClient, dfpSession);
   }
 
   /**
@@ -118,7 +121,8 @@ public class DfpJaxWsHeaderHandler implements HeaderHandler<DfpSession, DfpServi
    * @return a map of HTTP header names to values
    */
   private Map<String, Object> readHeaderElements(DfpSession dfpSession) {
-    Map<String, Object> mapToFill = Maps.newHashMap();
+    // The order here must match the order of the SoapRequestHeader elements in the WSDL.
+    Map<String, Object> mapToFill = Maps.newLinkedHashMap();
     mapToFill.put("networkCode", dfpSession.getNetworkCode());
     mapToFill.put("applicationName",
         userAgentCombiner.getUserAgent(dfpSession.getApplicationName()));
@@ -145,16 +149,7 @@ public class DfpJaxWsHeaderHandler implements HeaderHandler<DfpSession, DfpServi
         if (headerData.get(headerElementName) != null) {
           SOAPElement newElement =
               requestHeader.addChildElement(headerElementName, "ns1", requestHeaderNamespace);
-          if (headerElementName.equals("authentication")) {
-            Name xsiTypeString =
-                soapFactory.createName("type", "xsi", "http://www.w3.org/2001/XMLSchema-instance");
-            newElement.addAttribute(xsiTypeString, "ns1:ClientLogin");
-            SOAPElement tokenElement =
-                newElement.addChildElement("token", "ns1", requestHeaderNamespace);
-            tokenElement.addTextNode(headerData.get(headerElementName).toString());
-          } else {
-            newElement.addTextNode(headerData.get(headerElementName).toString());
-          }
+          newElement.addTextNode(headerData.get(headerElementName).toString());
         }
       }
       return requestHeader;

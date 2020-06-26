@@ -26,34 +26,32 @@ import com.google.api.client.googleapis.auth.oauth2.GoogleTokenResponse;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.common.base.Strings;
-import com.google.common.collect.Lists;
-
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.Arrays;
 
 /**
  * This example will create an OAuth2 refresh token that can be used with the
  * OfflineCredentials utility.
  *
- * This example is meant to be run from the command line and requires user
+ * <p>This example is meant to be run from the command line and requires user
  * input. This example does not use a properties file.
- *
- * @author Ray Tsang
  */
 public class GetRefreshTokenWithoutPropertiesFile {
 
-  private static final String SCOPE = "https://adwords.google.com/api/adwords";
+  private static final String SCOPE = "https://www.googleapis.com/auth/adwords";
 
   // This callback URL will allow you to copy the token from the success screen.
   private static final String CALLBACK_URL = "urn:ietf:wg:oauth:2.0:oob";
 
   private static Credential getOAuth2Credential(GoogleClientSecrets clientSecrets)
-      throws Exception {
+      throws IOException {
     GoogleAuthorizationCodeFlow authorizationFlow = new GoogleAuthorizationCodeFlow.Builder(
         new NetHttpTransport(),
         new JacksonFactory(),
         clientSecrets,
-        Lists.newArrayList(SCOPE))
+        Arrays.asList(SCOPE))
         // Set the access type to offline so that the token can be refreshed.
         // By default, the library will automatically refresh tokens when it
         // can, but this can be turned off by setting
@@ -62,10 +60,11 @@ public class GetRefreshTokenWithoutPropertiesFile {
 
     String authorizeUrl =
         authorizationFlow.newAuthorizationUrl().setRedirectUri(CALLBACK_URL).build();
-    System.out.println("Paste this url in your browser: \n" + authorizeUrl + '\n');
+    System.out.printf("Paste this url in your browser:%n%s%n", authorizeUrl);
 
     // Wait for the authorization code.
     System.out.println("Type the code you received here: ");
+    @SuppressWarnings("DefaultCharset") // Reading from stdin, so default charset is appropriate.
     String authorizationCode = new BufferedReader(new InputStreamReader(System.in)).readLine();
 
     // Authorize the OAuth2 token.
@@ -87,22 +86,30 @@ public class GetRefreshTokenWithoutPropertiesFile {
     return credential;
   }
 
-  public static void main(String[] args) throws Exception {
+  public static void main(String[] args) {
+    String clientId;
+    String clientSecret;
+    @SuppressWarnings("DefaultCharset") // Reading from stdin, so default charset is appropriate.
     BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
     System.out.println("Please input your client ID and secret. "
           + "If you do not have a client ID or secret, please create one in "
-          + "the API console: https://cloud.google.com/console");
-    System.out.println("Enter your client ID: ");
-    String clientId = reader.readLine();
-    if (Strings.isNullOrEmpty(clientId)) {
-      System.err.println("Please input your client ID.");
-      System.exit(1);
-    }
-    System.out.println("Enter your client secret: ");
-    String clientSecret = reader.readLine();
-    if (Strings.isNullOrEmpty(clientSecret)) {
-      System.err.println("Please input your client secret.");
-      System.exit(1);
+          + "the API console: https://console.developers.google.com");
+    try {
+      System.out.println("Enter your client ID: ");
+      clientId = reader.readLine();
+      if (Strings.isNullOrEmpty(clientId)) {
+        System.err.println("Invalid client ID.");
+        return;
+      }
+      System.out.println("Enter your client secret: ");
+      clientSecret = reader.readLine();
+      if (Strings.isNullOrEmpty(clientSecret)) {
+        System.err.println("Invalid client secret.");
+        return;
+      }
+    } catch (IOException ioe) {
+      System.err.printf("Failed to read client ID and secret: %s%n", ioe);
+      return;
     }
 
     GoogleClientSecrets clientSecrets = null;
@@ -115,13 +122,19 @@ public class GetRefreshTokenWithoutPropertiesFile {
       System.err.println(
           "Please input your client ID and secret. If you do not have a "
           + "client ID or secret, please create one in "
-          + "the API console: https://cloud.google.com/console");
-      System.exit(1);
+          + "the API console: https://console.developers.google.com");
+      return;
     }
 
     // Get the OAuth2 credential.
-    Credential credential = getOAuth2Credential(clientSecrets);
+    Credential credential = null;
+    try {
+      credential = getOAuth2Credential(clientSecrets);
+    } catch (IOException ioe) {
+      System.err.printf("Failed to generate credentials. Exception: %s%n", ioe);
+      return;
+    }
 
-    System.out.printf("Your refresh token is: %s\n", credential.getRefreshToken());
+    System.out.printf("Your refresh token is: %s%n", credential.getRefreshToken());
   }
 }

@@ -16,33 +16,81 @@ package com.google.api.ads.dfp.lib.client;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.mockito.Mockito.verify;
 
 import com.google.api.ads.common.lib.exception.ValidationException;
-import com.google.api.client.auth.oauth.OAuthParameters;
+import com.google.api.ads.dfp.lib.client.DfpSession.Builder;
+import com.google.api.ads.dfp.lib.client.DfpSession.ImmutableDfpSession;
 import com.google.api.client.auth.oauth2.BearerToken;
 import com.google.api.client.auth.oauth2.Credential;
-
+import com.google.common.collect.Lists;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.util.List;
 import org.apache.commons.configuration.PropertiesConfiguration;
+import org.hamcrest.CustomTypeSafeMatcher;
+import org.hamcrest.Matcher;
+import org.hamcrest.Matchers;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
-import org.mockito.Mock;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameters;
 import org.mockito.MockitoAnnotations;
-import org.slf4j.Logger;
 
 /**
  * Tests for {@link DfpSession}.
  */
-@RunWith(JUnit4.class)
+@RunWith(Parameterized.class)
 public class DfpSessionTest {
 
-  @Mock private Logger mockLibLogger;
+  /** Whether this test is testing immutable sessions. */
+  private final boolean isImmutable;
+  /** A Builder with all options explicitly set. */
+  private final Builder allSettingsBuilder;
+  /** A Credential suitable for use in this test. */
+  private final Credential credential;
+
+  @Rule public ExpectedException thrown = ExpectedException.none();
+
+  @Parameters(name = "{index}: isImmutable={0}")
+  public static List<Object[]> data() {
+    List<Object[]> data = Lists.newArrayList();
+    data.add(new Object[] {false});
+    data.add(new Object[] {true});
+    return data;
+  }
+
+  public DfpSessionTest(boolean isImmutable) {
+    this.isImmutable = isImmutable;
+    this.credential = new Credential(BearerToken.authorizationHeaderAccessMethod());
+    this.allSettingsBuilder =
+        new DfpSession.Builder()
+            .withApplicationName("FooBar")
+            .withEndpoint("https://ads.google.com")
+            .withOAuth2Credential(credential)
+            .withNetworkCode("networkCode");
+  }
+
+  private DfpSession build(Builder builder) throws ValidationException {
+    if (isImmutable) {
+      return builder.buildImmutable();
+    }
+    return builder.build();
+  }
+
+  private Matcher<ValidationException> createTriggerMatcher(final Matcher<String> matcher) {
+    return new CustomTypeSafeMatcher<ValidationException>("Trigger") {
+      @Override
+      protected boolean matchesSafely(ValidationException ve) {
+        return matcher.matches(ve.getTrigger());
+      }
+    };
+  }
 
   @Before
   public void setUp() {
@@ -54,8 +102,6 @@ public class DfpSessionTest {
    */
   @Test
   public void testReadPropertiesFromConfiguration() throws ValidationException {
-    Credential credential = new Credential(BearerToken.authorizationHeaderAccessMethod());
-
     PropertiesConfiguration config = new PropertiesConfiguration();
     config.setProperty("api.dfp.email", "email");
     config.setProperty("api.dfp.password", "password");
@@ -63,81 +109,54 @@ public class DfpSessionTest {
 
     DfpSession session =
         new DfpSession.Builder().from(config).withOAuth2Credential(credential).build();
-    assertEquals(session.getApplicationName(), "FooBar");
-    assertSame(session.getOAuth2Credential(), credential);
-    assertEquals(session.getEndpoint(), DfpSession.DEFAULT_ENDPOINT);
+    assertEquals("FooBar", session.getApplicationName());
+    assertSame(credential, session.getOAuth2Credential());
+    assertEquals(DfpSession.DEFAULT_ENDPOINT, session.getEndpoint());
   }
 
   /**
    * Tests that the builder correctly reads properties from a configuration.
    */
   @Test
-  public void testReadPropertiesFromConfiguration_badEndpoint() {
-    Credential credential = new Credential(BearerToken.authorizationHeaderAccessMethod());
-
+  public void testReadPropertiesFromConfiguration_badEndpoint() throws ValidationException {
     String badEndpoint = "3efsdafasd";
     PropertiesConfiguration config = new PropertiesConfiguration();
     config.setProperty("api.dfp.email", "email");
     config.setProperty("api.dfp.password", "password");
     config.setProperty("api.dfp.applicationName", "FooBar");
-    config.setProperty("api.dfp.endpoint", "3efsdafasd");
+    config.setProperty("api.dfp.endpoint", badEndpoint);
 
-    try {
-      new DfpSession.Builder().from(config).withOAuth2Credential(credential).build();
-      fail("Validation exception expected.");
-    } catch (ValidationException e) {
-      assertEquals("endpoint", e.getTrigger());
-      assertTrue(e.getMessage().contains(badEndpoint));
-    }
+    thrown.expect(ValidationException.class);
+    thrown.expect(createTriggerMatcher(Matchers.<String>equalTo("endpoint")));
+    thrown.expectMessage(badEndpoint);
+    build(new DfpSession.Builder().from(config).withOAuth2Credential(credential));
   }
 
   /**
    * Tests that the builder correctly reads properties from a configuration.
    */
   @Test
-  public void testReadPropertiesFromConfiguration_noApplicationName() {
-    Credential credential = new Credential(BearerToken.authorizationHeaderAccessMethod());
-
+  public void testReadPropertiesFromConfiguration_noApplicationName() throws ValidationException {
     PropertiesConfiguration config = new PropertiesConfiguration();
 
-    try {
-      new DfpSession.Builder().from(config).withOAuth2Credential(credential).build();
-      fail("Validation exception expected.");
-    } catch (ValidationException e) {
-      assertEquals("applicationName", e.getTrigger());
-    }
+    thrown.expect(ValidationException.class);
+    thrown.expect(createTriggerMatcher(Matchers.<String>equalTo("applicationName")));
+
+    build(new DfpSession.Builder().from(config).withOAuth2Credential(credential));
   }
 
   /**
    * Tests that the builder correctly reads properties from a configuration.
    */
   @Test
-  public void testReadPropertiesFromConfiguration_defaultApplicationName() {
-    Credential credential = new Credential(BearerToken.authorizationHeaderAccessMethod());
-
+  public void testReadPropertiesFromConfiguration_defaultApplicationName()
+      throws ValidationException {
     PropertiesConfiguration config = new PropertiesConfiguration();
     config.setProperty("api.dfp.applicationName", "INSERT_APPLICATION_NAME_HERE");
 
-    try {
-      new DfpSession.Builder().from(config).withOAuth2Credential(credential).build();
-      fail("Validation exception expected.");
-    } catch (ValidationException e) {
-      assertEquals("applicationName", e.getTrigger());
-    }
-  }
-
-  /**
-   * Tests that client login deprecation is warned from properties.
-   */
-  @Test
-  public void testReadPropertiesFromConfiguration_clientLoginDeprecationWarning() throws Exception {
-    PropertiesConfiguration config = new PropertiesConfiguration();
-    config.setProperty("api.dfp.applicationName", "FooBar");
-    config.setProperty("api.dfp.clientLoginToken", "clientLoginToken");
-
-    new DfpSession.Builder(mockLibLogger).from(config).build();
-
-    verify(mockLibLogger).warn(DfpSession.DEPRECATION_MESSAGE);
+    thrown.expect(ValidationException.class);
+    thrown.expect(createTriggerMatcher(Matchers.<String>equalTo("applicationName")));
+    build(new DfpSession.Builder().from(config).withOAuth2Credential(credential));
   }
 
   /**
@@ -145,69 +164,17 @@ public class DfpSessionTest {
    */
   @Test
   public void testBuilder_defaultEndpoint() throws Exception {
-    Credential credential = new Credential(BearerToken.authorizationHeaderAccessMethod());
+    DfpSession dfpSession =
+        build(
+            new DfpSession.Builder()
+                .withApplicationName("FooBar")
+                .withOAuth2Credential(credential)
+                .withNetworkCode("networkCode"));
 
-    DfpSession dfpSession = new DfpSession.Builder()
-        .withApplicationName("FooBar")
-        .withOAuth2Credential(credential)
-        .withNetworkCode("networkCode")
-        .build();
-
-    assertEquals(dfpSession.getApplicationName(), "FooBar");
-    assertSame(dfpSession.getOAuth2Credential(), credential);
-    assertEquals(dfpSession.getEndpoint(), DfpSession.DEFAULT_ENDPOINT);
-    assertEquals(dfpSession.getNetworkCode(), "networkCode");
-  }
-
-  /**
-   * Tests that the builder builds correctly for client login.
-   */
-  @Test
-  public void testBuilder_clientLogin() throws Exception {
-    DfpSession dfpSession = new DfpSession.Builder()
-        .withApplicationName("FooBar")
-        .withClientLoginToken("clientLoginToken")
-        .withEndpoint("https://www.google.com")
-        .withNetworkCode("networkCode")
-        .build();
-
-    assertEquals(dfpSession.getApplicationName(), "FooBar");
-    assertEquals(dfpSession.getClientLoginToken(), "clientLoginToken");
-    assertEquals(dfpSession.getEndpoint(), "https://www.google.com");
-    assertEquals(dfpSession.getNetworkCode(), "networkCode");
-  }
-
-  /**
-   * Tests that the builder  warns for client login.
-   */
-  @Test
-  public void testBuilder_clientLoginDeprecationWarning() throws Exception {
-    new DfpSession.Builder(mockLibLogger)
-        .withApplicationName("FooBar")
-        .withClientLoginToken("clientLoginToken")
-        .withEndpoint("https://www.google.com")
-        .withNetworkCode("networkCode")
-        .build();
-
-    verify(mockLibLogger).warn(DfpSession.DEPRECATION_MESSAGE);
-  }
-
-  /**
-   * Tests that the builder builds correctly for client login.
-   */
-  @Test
-  public void testSetClientLoginDeprecationWarning() throws Exception {
-    Credential credential = new Credential(BearerToken.authorizationHeaderAccessMethod());
-
-    DfpSession dfpSession = new DfpSession.Builder(mockLibLogger)
-        .withApplicationName("FooBar")
-        .withOAuth2Credential(credential)
-        .withEndpoint("https://www.google.com")
-        .withNetworkCode("networkCode")
-        .build();
-
-    dfpSession.setClientLoginToken("clientLoginToken");
-    verify(mockLibLogger).warn(DfpSession.DEPRECATION_MESSAGE);
+    assertEquals("FooBar", dfpSession.getApplicationName());
+    assertSame(credential, dfpSession.getOAuth2Credential());
+    assertEquals(DfpSession.DEFAULT_ENDPOINT, dfpSession.getEndpoint());
+    assertEquals("networkCode", dfpSession.getNetworkCode());
   }
 
   /**
@@ -215,37 +182,12 @@ public class DfpSessionTest {
    */
   @Test
   public void testBuilder_oAuth2() throws Exception {
-    Credential credential = new Credential(BearerToken.authorizationHeaderAccessMethod());
+    DfpSession dfpSession = build(allSettingsBuilder);
 
-    DfpSession dfpSession = new DfpSession.Builder()
-        .withApplicationName("FooBar")
-        .withEndpoint("https://www.google.com")
-        .withOAuth2Credential(credential)
-        .withNetworkCode("networkCode")
-        .build();
-
-    assertEquals(dfpSession.getApplicationName(), "FooBar");
-    assertSame(dfpSession.getOAuth2Credential(), credential);
-    assertEquals(dfpSession.getEndpoint(), "https://www.google.com");
-    assertEquals(dfpSession.getNetworkCode(), "networkCode");
-  }
-
-  /**
-   * Tests that the builder builds for multiple auths.
-   */
-  @Test
-  public void testBuilder_clientLoginAndOAuth2() throws Exception {
-    Credential credential = new Credential(BearerToken.authorizationHeaderAccessMethod());
-
-    DfpSession dfpSession = new DfpSession.Builder()
-        .withApplicationName("FooBar")
-        .withEndpoint("https://www.google.com")
-        .withClientLoginToken("clientLogin")
-        .withOAuth2Credential(credential)
-        .withNetworkCode("networkCode")
-        .build();
-
-    assertSame(dfpSession.getOAuth2Credential(), credential);
+    assertEquals("FooBar", dfpSession.getApplicationName());
+    assertSame(credential, dfpSession.getOAuth2Credential());
+    assertEquals("https://ads.google.com", dfpSession.getEndpoint());
+    assertEquals("networkCode", dfpSession.getNetworkCode());
   }
 
   /**
@@ -254,10 +196,11 @@ public class DfpSessionTest {
    */
   @Test
   public void testBuilder_returnsCopies() throws Exception {
-    DfpSession.Builder builder = new DfpSession.Builder()
-        .withApplicationName("FooBar")
-        .withClientLoginToken("clientLoginToken")
-        .withNetworkCode("networkCode");
+    DfpSession.Builder builder =
+        new DfpSession.Builder()
+            .withApplicationName("FooBar")
+            .withOAuth2Credential(credential)
+            .withNetworkCode("networkCode");
     assertNotSame(builder.build(), builder.build());
   }
 
@@ -266,16 +209,13 @@ public class DfpSessionTest {
    */
   @Test
   public void testBuilder_noAuths() throws Exception {
-    try {
-      new DfpSession.Builder()
-          .withApplicationName("FooBar")
-          .withEndpoint("https://www.google.com")
-          .withNetworkCode("networkCode")
-          .build();
-      fail("Validation exception expected.");
-    } catch (ValidationException e) {
-      assertEquals("Either ClientLogin or OAuth2 authentication must be used.", e.getMessage());
-    }
+    thrown.expect(ValidationException.class);
+    thrown.expectMessage(Matchers.<String>equalTo("OAuth2 authentication must be used."));
+    build(
+        new DfpSession.Builder()
+            .withApplicationName("FooBar")
+            .withEndpoint("https://ads.google.com")
+            .withNetworkCode("networkCode"));
   }
 
   /**
@@ -283,20 +223,15 @@ public class DfpSessionTest {
    */
   @Test
   public void testBuilder_noApplicationName() throws Exception {
-    Credential credential = new Credential(BearerToken.authorizationHeaderAccessMethod());
-
-    try {
-      new DfpSession.Builder()
-          .withEndpoint("https://www.google.com")
-          .withNetworkCode("networkCode")
-          .withOAuth2Credential(credential)
-          .build();
-      fail("Validation exception expected.");
-    } catch (ValidationException e) {
-      assertEquals(
-          "Application name must be set and not be the default [INSERT_APPLICATION_NAME_HERE]",
-          e.getMessage());
-    }
+    thrown.expect(ValidationException.class);
+    thrown.expectMessage(
+        Matchers.<String>equalTo(
+            "Application name must be set and not be the default [INSERT_APPLICATION_NAME_HERE]"));
+    build(
+        new DfpSession.Builder()
+            .withEndpoint("https://ads.google.com")
+            .withNetworkCode("networkCode")
+            .withOAuth2Credential(credential));
   }
 
   /**
@@ -304,75 +239,33 @@ public class DfpSessionTest {
    */
   @Test
   public void testBuilder_defaultApplicationName() throws Exception {
-    Credential credential = new Credential(BearerToken.authorizationHeaderAccessMethod());
-
-    try {
-      new DfpSession.Builder()
-          .withEndpoint("https://www.google.com")
-          .withNetworkCode("networkCode")
-          .withOAuth2Credential(credential)
-          .withApplicationName("INSERT_APPLICATION_NAME_HERE")
-          .build();
-      fail("Validation exception expected.");
-    } catch (ValidationException e) {
-      assertEquals(
-          "Application name must be set and not be the default [INSERT_APPLICATION_NAME_HERE]",
-          e.getMessage());
-    }
+    thrown.expect(ValidationException.class);
+    thrown.expectMessage(
+        Matchers.<String>equalTo(
+            "Application name must be set and not be the default [INSERT_APPLICATION_NAME_HERE]"));
+    build(
+        new DfpSession.Builder()
+            .withEndpoint("https://ads.google.com")
+            .withNetworkCode("networkCode")
+            .withOAuth2Credential(credential)
+            .withApplicationName("INSERT_APPLICATION_NAME_HERE"));
   }
 
   /**
-   * Tests that setting authentication clears out other types of authentication.
+   * Tests that the builder does not build with a whitespace application name.
    */
   @Test
-  public void testSetAutentication_clear() throws Exception {
-    OAuthParameters oAuthParameters = new OAuthParameters();
-    Credential credential = new Credential(BearerToken.authorizationHeaderAccessMethod());
-
-    DfpSession dfpSession = new DfpSession.Builder()
-        .withApplicationName("FooBar")
-        .withEndpoint("https://www.google.com")
-        .withClientLoginToken("clientLogin")
-        .withNetworkCode("networkCode")
-        .build();
-
-    dfpSession.setOAuth2Credential(credential);
-    assertSame(credential, dfpSession.getOAuth2Credential());
-    assertNull(dfpSession.getClientLoginToken());
-
-    dfpSession.setClientLoginToken("clientLogin");
-    assertEquals("clientLogin", dfpSession.getClientLoginToken());
-    assertNull(dfpSession.getOAuth2Credential());
-  }
-
-  /**
-   * Verifies that when a second auth method is set into the builder the others are cleared.
-   */
-  @Test
-  public void testBuilder_bothAuthsClientLoginFirst() throws Exception {
-    Credential credential = new Credential(BearerToken.authorizationHeaderAccessMethod());
-    DfpSession.Builder builder = new DfpSession.Builder()
-        .withApplicationName("FooBar")
-        .withOAuth2Credential(credential)
-        .withClientLoginToken("foo")
-        .withEndpoint("https://www.google.com")
-        .withNetworkCode("networkCode");
-    assertEquals("foo", builder.build().getClientLoginToken());
-  }
-
-  /**
-   * Verifies that when a second auth method is set into the builder the others are cleared.
-   */
-  @Test
-  public void testBuilder_bothAuthsOAuth2First() throws Exception {
-    Credential credential = new Credential(BearerToken.authorizationHeaderAccessMethod());
-    DfpSession.Builder builder = new DfpSession.Builder()
-        .withApplicationName("FooBar")
-        .withClientLoginToken("foo")
-        .withOAuth2Credential(credential)
-        .withEndpoint("https://www.google.com")
-        .withNetworkCode("networkCode");
-    assertSame(credential, builder.build().getOAuth2Credential());
+  public void testBuilder_whitespaceApplicationName() throws Exception {
+    thrown.expect(ValidationException.class);
+    thrown.expectMessage(
+        Matchers.<String>equalTo(
+            "Application name must be set and not be the default [INSERT_APPLICATION_NAME_HERE]"));
+    build(
+        new DfpSession.Builder()
+            .withEndpoint("https://ads.google.com")
+            .withNetworkCode("networkCode")
+            .withOAuth2Credential(credential)
+            .withApplicationName("      "));
   }
 
   /**
@@ -380,27 +273,93 @@ public class DfpSessionTest {
    */
   @Test
   public void testSetAutentication_null() throws Exception {
-    DfpSession dfpSession = new DfpSession.Builder()
-        .withApplicationName("FooBar")
-        .withEndpoint("https://www.google.com")
-        .withClientLoginToken("clientLogin")
-        .withNetworkCode("networkCode")
-        .build();
+    DfpSession dfpSession =
+        build(
+            new DfpSession.Builder()
+                .withApplicationName("FooBar")
+                .withEndpoint("https://ads.google.com")
+                .withOAuth2Credential(credential)
+                .withNetworkCode("networkCode"));
+    if (isImmutable) {
+      thrown.expect(UnsupportedOperationException.class);
+    } else {
+      thrown.expect(NullPointerException.class);
+    }
+    thrown.expectMessage("oAuth2Credential");
+    dfpSession.setOAuth2Credential(null);
+  }
 
-    try {
-      dfpSession.setOAuth2Credential(null);
-      fail("NullPointerException expected");
-    } catch (NullPointerException e) {
-      assertTrue("Expected oAuth2Credential in error message",
-          e.getMessage().contains("oAuth2Credential"));
+  /**
+   * Tests that copy builder copies all values correctly.
+   */
+  @Test
+  public void testImmutable_copyBuilder() throws Exception {
+    DfpSession dfpSession = build(allSettingsBuilder);
+
+    DfpSession copy = build(dfpSession.newBuilder());
+
+    assertNotSame(dfpSession, copy);
+    for (Method method : ImmutableDfpSession.class.getMethods()) {
+      if (method.getName().startsWith("get") && method.getParameterTypes().length == 1) {
+        Object originalAttributeValue = method.invoke(dfpSession);
+        Object copyAttributeValue = method.invoke(copy);
+        assertEquals(
+            "Copied session value does not match original for getter: " + method.getName(),
+            originalAttributeValue,
+            copyAttributeValue);
+      }
     }
 
-    try {
-      dfpSession.setClientLoginToken(null);
-      fail("NullPointerException expected");
-    } catch (NullPointerException e) {
-      assertTrue("Expected clientLoginToken in error message",
-          e.getMessage().contains("clientLoginToken"));
+    // The copy should point to the same OAuth2 credential as the original.
+    assertSame(dfpSession.getOAuth2Credential(), copy.getOAuth2Credential());
+  }
+
+  /**
+   * Tests that copy constructor on {@link ImmutableDfpSession} copies all values correctly.
+   */
+  @Test
+  public void testImmutable_setters_fail() throws Exception {
+    if (!isImmutable) {
+      assertTrue("Skipping immutability test because !isImmutable", true);
+      return;
+    }
+
+    ImmutableDfpSession immutableDfpSession = allSettingsBuilder.buildImmutable();
+
+    // Find each setter method and confirm that the immutable session throws an exception when the
+    // method is invoked.
+    for (Method method : ImmutableDfpSession.class.getMethods()) {
+      if (method.getName().startsWith("set") && method.getParameterTypes().length == 1) {
+        Class<?> parameterType = method.getParameterTypes()[0];
+        String attributeName = method.getName().substring("set".length());
+        String getterPrefix = "get";
+        if (parameterType.equals(boolean.class) || parameterType.equals(Boolean.class)) {
+          getterPrefix = "is";
+        }
+
+        String getMethodName =
+            getterPrefix + attributeName.substring(0, 1).toUpperCase() + attributeName.substring(1);
+        Method getMethod = ImmutableDfpSession.class.getMethod(getMethodName);
+
+        // Get the attribute value from the original session to use in the setter method invocation
+        // below.
+        Object attributeValue = getMethod.invoke(immutableDfpSession);
+
+        // Attempt to invoke the setter on the original session and verify that this
+        // throws an UnsupportedOperationException.
+        try {
+          method.invoke(immutableDfpSession, attributeValue);
+          fail(
+              "Invocation of setter method "
+                  + method.getName()
+                  + " should have failed for an ImmutableDfpSession, but it succeeded");
+        } catch (InvocationTargetException e) {
+          assertEquals(
+              "UnsupportedOperationException is expected on set",
+              UnsupportedOperationException.class,
+              e.getCause().getClass());
+        }
+      }
     }
   }
 

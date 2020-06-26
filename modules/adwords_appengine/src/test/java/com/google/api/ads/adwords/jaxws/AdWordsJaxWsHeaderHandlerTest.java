@@ -17,24 +17,20 @@ package com.google.api.ads.adwords.jaxws;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.google.api.ads.adwords.jaxws.v201309.billing.BudgetOrderServiceInterface;
-import com.google.api.ads.adwords.jaxws.v201309.ch.CustomerSyncServiceInterface;
-import com.google.api.ads.adwords.jaxws.v201309.cm.CampaignServiceInterface;
-import com.google.api.ads.adwords.jaxws.v201309.express.ExpressBusinessServiceInterface;
-import com.google.api.ads.adwords.jaxws.v201309.express.PromotionServiceInterface;
-import com.google.api.ads.adwords.jaxws.v201309.mcm.ManagedCustomerServiceInterface;
-import com.google.api.ads.adwords.jaxws.v201309.o.TargetingIdeaServiceInterface;
-import com.google.api.ads.adwords.jaxws.v201309.rm.AdwordsUserListServiceInterface;
+import com.google.api.ads.adwords.jaxws.v201802.billing.BudgetOrderServiceInterface;
+import com.google.api.ads.adwords.jaxws.v201802.ch.CustomerSyncServiceInterface;
+import com.google.api.ads.adwords.jaxws.v201802.cm.CampaignServiceInterface;
+import com.google.api.ads.adwords.jaxws.v201802.mcm.ManagedCustomerServiceInterface;
+import com.google.api.ads.adwords.jaxws.v201802.o.TargetingIdeaServiceInterface;
+import com.google.api.ads.adwords.jaxws.v201802.rm.AdwordsUserListServiceInterface;
 import com.google.api.ads.adwords.lib.client.AdWordsServiceDescriptor;
-import com.google.api.ads.adwords.lib.client.AdWordsServiceDescriptor.AdWordsSubProduct;
 import com.google.api.ads.adwords.lib.client.AdWordsSession;
 import com.google.api.ads.adwords.lib.conf.AdWordsApiConfiguration;
-import com.google.api.ads.common.lib.client.HeaderHandler;
+import com.google.api.ads.common.lib.conf.AdsLibConfiguration;
 import com.google.api.ads.common.lib.exception.AuthenticationException;
 import com.google.api.ads.common.lib.exception.ServiceException;
 import com.google.api.ads.common.lib.soap.AuthorizationHeaderHandler;
@@ -43,8 +39,13 @@ import com.google.api.ads.common.lib.useragent.UserAgentCombiner;
 import com.google.api.client.auth.oauth2.BearerToken;
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-
+import java.rmi.Remote;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
+import javax.xml.soap.SOAPElement;
+import javax.xml.ws.BindingProvider;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -54,19 +55,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import java.rmi.Remote;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
-
-import javax.xml.soap.SOAPElement;
-import javax.xml.ws.BindingProvider;
-
 /**
  * Tests for the {@link AdWordsJaxWsHeaderHandler} class.
- *
- * @author Joseph DiLallo
  */
 @RunWith(Parameterized.class)
 public class AdWordsJaxWsHeaderHandlerTest {
@@ -79,12 +69,9 @@ public class AdWordsJaxWsHeaderHandlerTest {
   /** namespace for request header elements */
   private final String headerElementsNamespace;
 
-  /** sub product of the interfaceClass */
-  private final AdWordsSubProduct subProduct;
-
   private AdWordsSession adWordsSession;
   private AdWordsServiceDescriptor adWordsServiceDescriptor;
-  
+
   @Mock
   private BindingProvider soapClient;
   @Mock
@@ -92,46 +79,41 @@ public class AdWordsJaxWsHeaderHandlerTest {
   @Mock
   private AdWordsApiConfiguration adWordsApiConfiguration;
   @Mock
+  private AdsLibConfiguration adsLibConfiguration;
+  @Mock
   private AuthorizationHeaderHandler authorizationHeaderHandler;
   @Mock
   private UserAgentCombiner userAgentCombiner;
 
   private static final String DEVELOPER_TOKEN = "DEVELOPER_TOKEN";
   private static final String CLIENT_CUSTOMER_ID = "CLIENT_CUSTOMER_ID";
-  private static final String CLIENT_LOGIN_TOKEN = "CLIENT_LOGIN_TOKEN";
   private static final String USER_AGENT = "USER_AGENT";
   private static final String VERSION = "v201101";
-  private static final Long EXPRESS_BUSINESS_ID = 123456789L;
 
   /**
    * Constructor.
    */
   public AdWordsJaxWsHeaderHandlerTest(Class<? extends Remote> interfaceClass,
-      String headerElementsNamespace, AdWordsSubProduct subProduct) {
+      String headerElementsNamespace) {
     this.interfaceClass = interfaceClass;
     this.headerElementsNamespace = headerElementsNamespace;
-    this.subProduct = subProduct;
   }
 
-  @Parameters
+  @Parameters(name = "interface={0}, namespace={1}")
   public static Collection<Object[]> data() {
     Collection<Object[]> parameters = new ArrayList<Object[]>();
-    // Test at least one standard interface for every subpackage of v201309
+    // Test at least one standard interface for every subpackage of v201802
     parameters.add(
-        new Object[] {BudgetOrderServiceInterface.class, "billing", AdWordsSubProduct.DEFAULT});
+        new Object[] {BudgetOrderServiceInterface.class, "billing"});
     parameters.add(
-        new Object[] {CustomerSyncServiceInterface.class, "ch", AdWordsSubProduct.DEFAULT});
-    parameters.add(new Object[] {CampaignServiceInterface.class, "cm", AdWordsSubProduct.DEFAULT});
+        new Object[] {CustomerSyncServiceInterface.class, "ch"});
+    parameters.add(new Object[] {CampaignServiceInterface.class, "cm"});
     parameters.add(
-        new Object[] {ManagedCustomerServiceInterface.class, "mcm", AdWordsSubProduct.DEFAULT});
+        new Object[] {ManagedCustomerServiceInterface.class, "mcm"});
     parameters.add(
-        new Object[] {TargetingIdeaServiceInterface.class, "o", AdWordsSubProduct.DEFAULT});
+        new Object[] {TargetingIdeaServiceInterface.class, "o"});
     parameters.add(
-        new Object[] {AdwordsUserListServiceInterface.class, "rm", AdWordsSubProduct.DEFAULT});
-    parameters.add(
-        new Object[] {ExpressBusinessServiceInterface.class, "express", AdWordsSubProduct.EXPRESS});
-    parameters.add(
-        new Object[] {PromotionServiceInterface.class, "express", AdWordsSubProduct.EXPRESS});
+        new Object[] {AdwordsUserListServiceInterface.class, "rm"});
    return parameters;
   }
 
@@ -140,23 +122,19 @@ public class AdWordsJaxWsHeaderHandlerTest {
   public void setUp() throws Exception {
     MockitoAnnotations.initMocks(this);
 
-    Map<AdWordsSubProduct, HeaderHandler<AdWordsSession, AdWordsServiceDescriptor>>
-        subProductHandlerMap = Maps.newHashMap();
-    subProductHandlerMap.put(AdWordsSubProduct.DEFAULT,
-        new HeaderHandler.NoOpHeaderHandler<AdWordsSession, AdWordsServiceDescriptor>());
-    subProductHandlerMap.put(AdWordsSubProduct.EXPRESS,
-        new AdWordsJaxWsExpressHeaderHandler(soapClientHandler, adWordsApiConfiguration));
-    
-    headerHandler = new AdWordsJaxWsHeaderHandler(soapClientHandler, adWordsApiConfiguration,
-        authorizationHeaderHandler, userAgentCombiner, subProductHandlerMap);
+    headerHandler = new AdWordsJaxWsHeaderHandler(soapClientHandler,
+        adWordsApiConfiguration,
+        adsLibConfiguration,
+        authorizationHeaderHandler,
+        userAgentCombiner);
 
     adWordsSession = new AdWordsSession.Builder()
         .withClientCustomerId(CLIENT_CUSTOMER_ID)
-        .withClientLoginToken(CLIENT_LOGIN_TOKEN)
+        .withOAuth2Credential(new Credential(BearerToken.authorizationHeaderAccessMethod()))
         .withDeveloperToken(DEVELOPER_TOKEN)
         .withUserAgent(USER_AGENT)
         .build();
-    
+
     adWordsServiceDescriptor =
         new AdWordsServiceDescriptor(interfaceClass, VERSION, adWordsApiConfiguration);
   }
@@ -169,21 +147,15 @@ public class AdWordsJaxWsHeaderHandlerTest {
         String.format("http://www.example.com/%s/v201101", headerElementsNamespace);
     String namespace = "http://www.example.com/cm/v201101";
     Map<String, String> expectedHeaders = new HashMap<String, String>();
-    if (subProduct == AdWordsSubProduct.EXPRESS && adWordsSession.getExpressBusinessId() != null) {
-      expectedHeaders.put("expressBusinessId", String.valueOf(EXPRESS_BUSINESS_ID));
-    }
 
     String libSig = "libSig";
     adWordsSession.setValidateOnly(true);
     expectedHeaders.put("developerToken", DEVELOPER_TOKEN);
     expectedHeaders.put("clientCustomerId", CLIENT_CUSTOMER_ID);
     expectedHeaders.put("validateOnly", "true");
-    expectedHeaders.put("authToken", CLIENT_LOGIN_TOKEN);
     expectedHeaders.put("userAgent", libSig);
-    
+
     when(adWordsApiConfiguration.getNamespacePrefix()).thenReturn(namespacePrefix);
-    when(adWordsApiConfiguration.getServiceSubProduct(eq(VERSION), anyString()))
-        .thenReturn(subProduct);
     when(userAgentCombiner.getUserAgent(USER_AGENT)).thenReturn(libSig);
 
     headerHandler.setHeaders(soapClient, adWordsSession, adWordsServiceDescriptor);
@@ -207,16 +179,6 @@ public class AdWordsJaxWsHeaderHandlerTest {
     } else {
       fail("Generated headerValue is not a SOAPElement: " + headerArg.getValue());
     }
-  }
-
-  @Test
-  public void testSetAuthenticationHeaders_clientLogin() throws Exception {
-    Object soapClient = new Object();
-    Map<String, Object> headerElements = new HashMap<String, Object>();
-
-    headerHandler.setAuthenticationHeaders(soapClient, headerElements, adWordsSession);
-
-    assertEquals(CLIENT_LOGIN_TOKEN, headerElements.get("authToken"));
   }
 
   @Test

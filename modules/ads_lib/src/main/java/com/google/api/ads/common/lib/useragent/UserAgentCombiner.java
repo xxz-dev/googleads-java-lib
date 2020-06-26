@@ -14,27 +14,30 @@
 
 package com.google.api.ads.common.lib.useragent;
 
+import com.google.api.ads.adwords.lib.AdWordsPluginModule;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
+import com.google.common.base.Predicates;
+import com.google.common.collect.Collections2;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.inject.Inject;
-
 import java.util.List;
-
 import javax.annotation.Nullable;
 
 /**
  * Combines all user agents along with a user supplied string.
- *
- * @author Adam Rogal
  */
 public class UserAgentCombiner {
 
-  private List<UserAgentProvider> userAgentProviders;
-
+  private ImmutableList<UserAgentProvider> userAgentProviders;
+  
   /**
-   * Constructor.
+   * Constructor that builds an instance based on a list of underlying user agent
+   * providers. The {@code xyzHolder} parameters are for user agent providers that
+   * may be null in certain contexts.
    *
    * @param productUserAgentProvider the product user agent library user agent provider
    * @param productFrameworkProviderHolder holder for the product/framework user agent
@@ -43,6 +46,7 @@ public class UserAgentCombiner {
    * @param frameworkProviderHolder holder for the framework user agent provider
    * @param runtimeUserAgentProvider the runtime user agent provider
    * @param buildTypeUserAgentProvider the build type user agent provider
+   * @param extensionProviderHolder holder for the extension user agent provider
    */
   @Inject
   public UserAgentCombiner(ProductUserAgentProvider productUserAgentProvider,
@@ -50,20 +54,33 @@ public class UserAgentCombiner {
       AdsLibraryUserAgentProvider adsLibraryUserAgentProvider,
       FrameworkProviderHolder frameworkProviderHolder,
       RuntimeUserAgentProvider runtimeUserAgentProvider,
-      BuildTypeUserAgentProvider buildTypeUserAgentProvider) {
-    this(Lists.newArrayList(productUserAgentProvider, productFrameworkProviderHolder.value,
-        adsLibraryUserAgentProvider, frameworkProviderHolder.value, runtimeUserAgentProvider,
-        buildTypeUserAgentProvider));
+      BuildTypeUserAgentProvider buildTypeUserAgentProvider,
+      AdsUtilitiesUserAgentProvider adsUtilitiesUserAgentProvider,
+      ExtensionProviderHolder extensionProviderHolder) {
+    this(
+        Lists.newArrayList(
+            productUserAgentProvider,
+            productFrameworkProviderHolder.value,
+            adsLibraryUserAgentProvider,
+            frameworkProviderHolder.value,
+            runtimeUserAgentProvider,
+            buildTypeUserAgentProvider,
+            adsUtilitiesUserAgentProvider,
+            extensionProviderHolder.value));
   }
 
   /**
    * Constructor used for testing.
    *
    * @param userAgentProviders the user agent providers
+   * utilities agent provider
    */
   @VisibleForTesting
-  UserAgentCombiner(List<UserAgentProvider> userAgentProviders) {
-    this.userAgentProviders = userAgentProviders;
+  UserAgentCombiner(
+      List<UserAgentProvider> userAgentProviders) {
+    // Remove any nulls from the list, since ImmutableList does not support null entries.
+    this.userAgentProviders = ImmutableList.<UserAgentProvider>copyOf(
+        Collections2.filter(userAgentProviders, Predicates.notNull()));
   }
 
   /**
@@ -71,20 +88,45 @@ public class UserAgentCombiner {
    * {@code "(UserAgent1,UserAgent2,UserAgent3,...)"}
    */
   public String getUserAgent(String nonLibraryUserAgent) {
-    return nonLibraryUserAgent + " ("
-        + Joiner.on(", ").skipNulls().join(
-            Lists.transform(userAgentProviders, new Function<UserAgentProvider, String>() {
-              public String apply(@Nullable UserAgentProvider input) {
-                return input == null ? null : input.getUserAgent();
-              }}))
-        + ")";
+    StringBuilder agentStringBuilder = new StringBuilder();
+    agentStringBuilder.append(nonLibraryUserAgent);
+    agentStringBuilder.append(" (");
+    agentStringBuilder.append(Joiner.on(", ").skipNulls().join(
+        Iterables.transform(userAgentProviders, new Function<UserAgentProvider, String>() {
+          @Override
+          public String apply(@Nullable UserAgentProvider input) {
+            return input == null ? null : input.getUserAgent();
+          }})));
+    agentStringBuilder.append(')');
+    return agentStringBuilder.toString();
   }
-
+  
+  /**
+   * Holder that allows for <em>optional</em> injection of a {@link
+   * ProductFrameworkUserAgentProvider}.
+   * This is necessary because UserAgentCombiner instances are used in multiple contexts, some of
+   * which do not have an associated SOAP toolkit. In such cases, the {@code value} will be null.
+   */
   static class ProductFrameworkProviderHolder {
     @Inject(optional = true) ProductFrameworkUserAgentProvider value;
   }
 
+  /**
+   * Holder that allows for <em>optional</em> injection of a {@link FrameworkUserAgentProvider}.
+   * This is necessary because UserAgentCombiner instances are used in multiple contexts, some of
+   * which do not have an associated SOAP toolkit. In such cases, the {@code value} will be null.
+   */
   static class FrameworkProviderHolder {
     @Inject(optional = true) FrameworkUserAgentProvider value;
+  }
+  
+  /**
+   * Holder that allows for <em>optional</em> injection of a {@link ExtensionUserAgentProvider}.
+   * This is necessary because the {@link ExtensionUserAgentProvider} type will only be bound if an
+   * extension or application provided an {@link AdWordsPluginModule} to the Guice injector.
+   * Otherwise, the {@code value} will be null.
+   */
+  static class ExtensionProviderHolder {
+    @Inject(optional = true) ExtensionUserAgentProvider value;
   }
 }

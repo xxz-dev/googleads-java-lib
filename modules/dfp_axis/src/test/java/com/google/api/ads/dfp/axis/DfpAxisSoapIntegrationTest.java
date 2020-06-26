@@ -15,14 +15,16 @@
 package com.google.api.ads.dfp.axis;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import com.google.api.ads.common.lib.auth.OfflineCredentials;
+import com.google.api.ads.common.lib.auth.testing.AuthResponseProvider;
 import com.google.api.ads.common.lib.testing.MockHttpIntegrationTest;
 import com.google.api.ads.dfp.axis.factory.DfpServices;
 import com.google.api.ads.dfp.axis.testing.SoapRequestXmlProvider;
-import com.google.api.ads.dfp.axis.v201302.Company;
-import com.google.api.ads.dfp.axis.v201302.CompanyServiceInterface;
+import com.google.api.ads.dfp.axis.v201711.Company;
+import com.google.api.ads.dfp.axis.v201711.CompanyServiceInterface;
 import com.google.api.ads.dfp.lib.client.DfpSession;
 import com.google.api.ads.dfp.lib.soap.testing.SoapResponseXmlProvider;
 import com.google.api.client.auth.oauth2.Credential;
@@ -31,45 +33,23 @@ import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.common.collect.Lists;
 
+import org.custommonkey.xmlunit.XMLAssert;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 /**
- * Tests that a DFP Axis SOAP call can be made end-to-end.
- *
- * @author Adam Rogal
+ * Tests that a DFP Axis SOAP call can be made end-to-end with compression disabled.
  */
 @RunWith(JUnit4.class)
 public class DfpAxisSoapIntegrationTest extends MockHttpIntegrationTest {
 
-  private static final String API_VERSION = "v201302";
+  private static final String API_VERSION = "v201711";
 
-  /**
-   * Default constructor.
-   */
-  public DfpAxisSoapIntegrationTest() {}
-
-  /**
-   * Tests making a Axis DFP API call with ClientLogin.
-   */
-  @Test
-  public void testGoldenSoap_clientLogin() throws Exception {
-    testHttpServer.setMockResponseBody(SoapResponseXmlProvider.getTestSoapResponse(API_VERSION));
-
-    DfpSession session = new DfpSession.Builder().withApplicationName("TEST_APP")
-        .withClientLoginToken("TEST_TOKEN")
-        .withEndpoint(testHttpServer.getServerUrl())
-        .withNetworkCode("TEST_NETWORK_CODE")
-        .build();
-
-    CompanyServiceInterface companyService =
-        new DfpServices().get(session, CompanyServiceInterface.class);
-    Company[] companies = companyService.createCompanies(new Company[] {new Company()});
-
-    assertEquals(1234L, companies[0].getId().longValue());
-    assertEquals(SoapRequestXmlProvider.getClientLoginSoapRequest(API_VERSION),
-        testHttpServer.getLastRequestBody());
+  @BeforeClass
+  public static void setupClass() {
+    System.setProperty("api.dfp.useCompression", "false");
   }
 
   /**
@@ -94,8 +74,10 @@ public class DfpAxisSoapIntegrationTest extends MockHttpIntegrationTest {
     Company[] companies = companyService.createCompanies(new Company[] {new Company()});
 
     assertEquals(1234L, companies[0].getId().longValue());
-    assertEquals(SoapRequestXmlProvider.getOAuth2SoapRequest(API_VERSION),
+    XMLAssert.assertXMLEqual(SoapRequestXmlProvider.getOAuth2SoapRequest(API_VERSION),
         testHttpServer.getLastRequestBody());
+    assertFalse("Did not request compression but request was compressed",
+        testHttpServer.wasLastRequestBodyCompressed());
     assertEquals("Bearer TEST_ACCESS_TOKEN", testHttpServer.getLastAuthorizationHttpHeader());
   }
 
@@ -105,14 +87,8 @@ public class DfpAxisSoapIntegrationTest extends MockHttpIntegrationTest {
   @Test
   public void testGoldenSoap_oauth2_offlineCredentials() throws Exception {
     testHttpServer.setMockResponseBodies(Lists.newArrayList(
-        "{\"access_token\" : \"TEST_ACCESS_TOKEN_1\","
-            + "\"token_type\" : \"Bearer\","
-            + "\"expires_in\" : 1,"
-            + "\"refresh_token\" : \"newRefreshToken\"}",
-        "{\"access_token\" : \"TEST_ACCESS_TOKEN_2\","
-            + "\"token_type\" : \"Bearer\","
-            + "\"expires_in\" : 3600,"
-            + "\"refresh_token\" : \"newRefreshToken2\"}",
+        AuthResponseProvider.getTestOAuthResponse("TEST_ACCESS_TOKEN_1", 1L, "newRefreshToken1"),
+        AuthResponseProvider.getTestOAuthResponse("TEST_ACCESS_TOKEN_2", 3600L, "newRefreshToken2"),
         SoapResponseXmlProvider.getTestSoapResponse(API_VERSION)));
 
     OfflineCredentials offlineCredentials =
@@ -130,7 +106,8 @@ public class DfpAxisSoapIntegrationTest extends MockHttpIntegrationTest {
     assertTrue(testHttpServer.getLastRequestBody().contains("client_id=clientId"));
     assertTrue(testHttpServer.getLastRequestBody().contains("client_secret=clientSecret"));
 
-    // Make sure the old token expires.
+    // Make sure the old token expires - the session builder should issue a request
+    // for another access token.
     Thread.sleep(1000);
 
     assertEquals("TEST_ACCESS_TOKEN_1", credential.getAccessToken());
@@ -147,8 +124,10 @@ public class DfpAxisSoapIntegrationTest extends MockHttpIntegrationTest {
     Company[] companies = companyService.createCompanies(new Company[] {new Company()});
 
     assertEquals(1234L, companies[0].getId().longValue());
-    assertEquals(SoapRequestXmlProvider.getOAuth2SoapRequest(API_VERSION),
+    XMLAssert.assertXMLEqual(SoapRequestXmlProvider.getOAuth2SoapRequest(API_VERSION),
         testHttpServer.getLastRequestBody());
+    assertFalse("Did not request compression but request was compressed",
+        testHttpServer.wasLastRequestBodyCompressed());
     assertEquals("newRefreshToken2", credential.getRefreshToken());
     assertEquals("Bearer TEST_ACCESS_TOKEN_2", testHttpServer.getLastAuthorizationHttpHeader());
   }

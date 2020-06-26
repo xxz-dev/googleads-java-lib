@@ -14,25 +14,22 @@
 
 package com.google.api.ads.dfp.lib.client;
 
-import com.google.api.ads.common.lib.auth.ClientLoginCompatible;
 import com.google.api.ads.common.lib.auth.OAuth2Compatible;
 import com.google.api.ads.common.lib.client.AdsSession;
 import com.google.api.ads.common.lib.conf.ConfigurationHelper;
 import com.google.api.ads.common.lib.conf.ConfigurationLoadException;
 import com.google.api.ads.common.lib.exception.ValidationException;
-import com.google.api.ads.dfp.lib.utils.DfpInternals;
 import com.google.api.client.auth.oauth2.Credential;
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 
 import org.apache.commons.configuration.Configuration;
-import org.slf4j.Logger;
 
 import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URL;
 
+import javax.annotation.concurrent.ThreadSafe;
 
 /**
  * A {@code DfpSession} represents a single session of DFP use.
@@ -40,24 +37,17 @@ import java.net.URL;
  * <p>
  * Implementation is not thread-safe.
  * </p>
- *
- * @author Adam Rogal
  */
-public class DfpSession implements AdsSession, OAuth2Compatible, ClientLoginCompatible {
+public class DfpSession implements AdsSession, OAuth2Compatible {
 
-  static final String DEPRECATION_MESSAGE = "ClientLogin is now deprecated. "
-      + "Please switch to OAuth2. See OfflineCredentials for more information.";
-
-  private String clientLoginToken;
   private String networkCode;
   private Credential oAuth2Credential;
 
 
   private final String applicationName;
   private final String endpoint;
-  private final Logger libLogger;
 
-  public static final String DEFAULT_ENDPOINT = "https://www.google.com/";
+  public static final String DEFAULT_ENDPOINT = "https://ads.google.com/";
 
   private static final String DEFAULT_APPLICATION_NAME = "INSERT_APPLICATION_NAME_HERE";
 
@@ -68,15 +58,9 @@ public class DfpSession implements AdsSession, OAuth2Compatible, ClientLoginComp
    */
   private DfpSession(Builder builder) {
     this.applicationName = builder.applicationName;
-    this.clientLoginToken = builder.clientLoginToken;
     this.endpoint = builder.endpoint;
     this.networkCode = builder.networkCode;
     this.oAuth2Credential = builder.oAuth2Credential;
-    this.libLogger = builder.libLogger;
-
-    if (builder.clientLoginToken != null) {
-      this.setClientLoginToken(builder.clientLoginToken);
-    }
   }
 
   /**
@@ -89,6 +73,7 @@ public class DfpSession implements AdsSession, OAuth2Compatible, ClientLoginComp
   /**
    * Gets the OAuth2 credentials.
    */
+  @Override
   public Credential getOAuth2Credential() {
     return oAuth2Credential;
   }
@@ -104,36 +89,9 @@ public class DfpSession implements AdsSession, OAuth2Compatible, ClientLoginComp
   }
 
   /**
-   * Gets the client login token.
-   *
-   * @deprecated It is encouraged that you switch to OAuth2 at your earliest
-   *             convenience. Please see the OfflineCredentials utility for
-   *             generating offline credentials easily.
-   */
-  @Deprecated
-  public String getClientLoginToken() {
-    return clientLoginToken;
-  }
-
-  /**
-   * Sets the client login token. Any other authentication credentials on the
-   * session will be removed.
-   *
-   * @deprecated It is encouraged that you switch to OAuth2 at your earliest
-   *             convenience. Please see the OfflineCredentials utility for
-   *             generating offline credentials easily.
-   */
-  @Deprecated
-  public void setClientLoginToken(String clientLoginToken) {
-    Preconditions.checkNotNull(clientLoginToken, "clientLoginToken cannot be null.");
-    clearAuthentication();
-    this.clientLoginToken = clientLoginToken;
-    libLogger.warn(DEPRECATION_MESSAGE);
-  }
-
-  /**
    * Gets the endpoint.
    */
+  @Override
   public String getEndpoint() {
     return endpoint;
   }
@@ -157,9 +115,43 @@ public class DfpSession implements AdsSession, OAuth2Compatible, ClientLoginComp
    */
   private void clearAuthentication() {
     oAuth2Credential = null;
-    clientLoginToken = null;
   }
 
+
+  /**
+   * Returns a new {@link Builder} with all settings copied from this session. This is <em>not</em>
+   * thread-safe unless this session is an {@link ImmutableDfpSession}.
+   */
+  public Builder newBuilder() {
+    return new Builder(this);
+  }
+
+  /**
+   * Immutable, thread-safe implementation of DfpSession.
+   */
+  @ThreadSafe
+  public static final class ImmutableDfpSession extends DfpSession {
+    private ImmutableDfpSession(Builder builder) {
+      super(builder);
+    }
+
+    private void throwUnsupportedOperationException(String attributeName) {
+      throw new UnsupportedOperationException(
+          String.format(
+              "Cannot set %s. ImmutableDfpSession is immutable.", attributeName));
+    }
+
+    @Override
+    public void setOAuth2Credential(Credential oAuth2Credential) {
+      throwUnsupportedOperationException("oAuth2Credential");
+    }
+
+    @Override
+    public void setNetworkCode(String networkCode) {
+      throwUnsupportedOperationException("networkCode");
+    }
+
+  }
 
   /**
    * Builder for {@code DfpSession}.
@@ -172,43 +164,44 @@ public class DfpSession implements AdsSession, OAuth2Compatible, ClientLoginComp
 
     private String applicationName;
     private String endpoint;
-    private String clientLoginToken;
     private String networkCode;
     private Credential oAuth2Credential;
 
 
-    private final Logger libLogger;
     private final ConfigurationHelper configHelper;
 
     /**
-     * Constructor.
+     * Constructs an empty builder. To construct a builder initialized to the settings of
+     * an existing {@link DfpSession}, use {@link DfpSession#newBuilder()} instead.
      */
     public Builder() {
-      this(DfpInternals.getInstance().getAdsServiceLoggers().getLibLogger());
+      this.configHelper = new ConfigurationHelper();
     }
 
-    @VisibleForTesting
-    Builder(Logger libLogger) {
-       this(libLogger, new ConfigurationHelper());
+    private Builder(DfpSession dfpSessionToClone) {
+      this();
+      this.applicationName = dfpSessionToClone.getApplicationName();
+      this.endpoint = dfpSessionToClone.getEndpoint();
+      this.networkCode = dfpSessionToClone.getNetworkCode();
+      this.oAuth2Credential = dfpSessionToClone.getOAuth2Credential();
     }
 
-    private Builder(Logger libLogger, ConfigurationHelper configHelper) {
-      this.libLogger = libLogger;
-      this.configHelper = configHelper;
-    }
-
+    @Override
     public Builder fromFile() throws ConfigurationLoadException {
       return fromFile(Builder.DEFAULT_CONFIGURATION_FILENAME);
     }
 
+    @Override
     public Builder fromFile(String path) throws ConfigurationLoadException {
       return from(configHelper.fromFile(path));
     }
 
+    @Override
     public Builder fromFile(File path) throws ConfigurationLoadException {
       return from(configHelper.fromFile(path));
     }
 
+    @Override
     public Builder fromFile(URL path) throws ConfigurationLoadException {
       return from(configHelper.fromFile(path));
     }
@@ -221,33 +214,17 @@ public class DfpSession implements AdsSession, OAuth2Compatible, ClientLoginComp
      * <li>api.dfp.applicationName</li>
      * <li>api.dfp.networkCode</li>
      * <li>api.dfp.endpoint</li>
-     * <li>Deprecated: api.dfp.clientLoginToken - use OAuth2 instead.</li>
      * </ul>
      *
      * @param config the configuration
      * @return Builder populated from the configuration
      */
+    @Override
     public Builder from(Configuration config) {
       this.applicationName = config.getString("api.dfp.applicationName", null);
       this.networkCode = config.getString("api.dfp.networkCode", null);
       this.endpoint = config.getString("api.dfp.endpoint", null);
-      this.clientLoginToken = config.getString("api.dfp.clientLoginToken", null);
 
-      return this;
-    }
-
-    /**
-     * Includes hard-coded ClientLogin token that will be used instead of
-     * fetching a new one.
-     *
-     * @deprecated It is encouraged that you switch to OAuth2 at your earliest
-     *             convenience. Please see the OfflineCredentials utility for
-     *             generating offline credentials easily.
-     */
-    @Deprecated
-    public Builder withClientLoginToken(String clientLoginToken) {
-      clearAuthentication();
-      this.clientLoginToken = clientLoginToken;
       return this;
     }
 
@@ -278,7 +255,7 @@ public class DfpSession implements AdsSession, OAuth2Compatible, ClientLoginComp
 
     /**
      * Override the endpoint server. Optional and defaults to
-     * https://www.google.com/.
+     * https://ads.google.com/.
      */
     public Builder withEndpoint(String endpoint) {
       this.endpoint = endpoint;
@@ -291,7 +268,6 @@ public class DfpSession implements AdsSession, OAuth2Compatible, ClientLoginComp
      */
     private void clearAuthentication() {
       oAuth2Credential = null;
-      clientLoginToken = null;
     }
 
     /**
@@ -300,10 +276,22 @@ public class DfpSession implements AdsSession, OAuth2Compatible, ClientLoginComp
      * @return the built {@code DfpSession}
      * @throws ValidationException if the {@code DfpSession} did not validate
      */
+    @Override
     public DfpSession build() throws ValidationException {
       defaultOptionals();
       validate();
       return new DfpSession(this);
+    }
+
+    /**
+     * Builds a thread-safe {@link ImmutableDfpSession}.
+     * @return the built {@code ImmutableDfpSession}
+     * @throws ValidationException if the attributes of this builder fail validation
+     */
+    public ImmutableDfpSession buildImmutable() throws ValidationException {
+      defaultOptionals();
+      validate();
+      return new ImmutableDfpSession(this);
     }
 
     /**
@@ -320,14 +308,13 @@ public class DfpSession implements AdsSession, OAuth2Compatible, ClientLoginComp
      */
     private void validate() throws ValidationException {
       // Check for at least one authentication mechanism.
-      if (this.clientLoginToken == null
-          && this.oAuth2Credential == null) {
+      if (this.oAuth2Credential == null) {
         throw new ValidationException(
-            "Either ClientLogin or OAuth2 authentication must be used.", "");
+            "OAuth2 authentication must be used.", "");
       }
 
       // Check that application name is not empty or the default.
-      if (Strings.isNullOrEmpty(applicationName)
+      if (Strings.nullToEmpty(applicationName).trim().isEmpty()
           || applicationName.contains(DEFAULT_APPLICATION_NAME)) {
         throw new ValidationException(String.format(
             "Application name must be set and not be the default [%s]", DEFAULT_APPLICATION_NAME),

@@ -14,18 +14,26 @@
 
 package com.google.api.ads.common.lib.soap.axis;
 
+import com.google.api.ads.common.lib.client.RemoteCallReturn;
+import com.google.api.ads.common.lib.client.RequestInfo;
+import com.google.api.ads.common.lib.client.ResponseInfo;
 import com.google.api.ads.common.lib.exception.ServiceException;
-import com.google.api.ads.common.lib.soap.RequestInfo;
-import com.google.api.ads.common.lib.soap.ResponseInfo;
+import com.google.api.ads.common.lib.soap.RequestInfoXPathSet;
+import com.google.api.ads.common.lib.soap.ResponseInfoXPathSet;
 import com.google.api.ads.common.lib.soap.SoapCall;
-import com.google.api.ads.common.lib.soap.SoapCallReturn;
 import com.google.api.ads.common.lib.soap.SoapClientHandler;
 import com.google.api.ads.common.lib.soap.SoapClientHandlerInterface;
 import com.google.api.ads.common.lib.soap.SoapServiceDescriptor;
 import com.google.api.ads.common.lib.soap.compatability.AxisCompatible;
 import com.google.common.base.Preconditions;
-
-import org.apache.axis.AxisFault;
+import java.lang.reflect.InvocationTargetException;
+import java.util.Hashtable;
+import java.util.Map;
+import javax.inject.Inject;
+import javax.xml.namespace.QName;
+import javax.xml.soap.SOAPException;
+import org.apache.axis.EngineConfiguration;
+import org.apache.axis.EngineConfigurationFactory;
 import org.apache.axis.MessageContext;
 import org.apache.axis.client.Service;
 import org.apache.axis.client.Stub;
@@ -33,28 +41,44 @@ import org.apache.axis.message.SOAPHeaderElement;
 import org.apache.axis.transport.http.HTTPConstants;
 import org.apache.commons.beanutils.BeanUtils;
 
-import java.lang.reflect.InvocationTargetException;
-import java.util.Hashtable;
-import java.util.Map;
-
-import javax.xml.namespace.QName;
-import javax.xml.soap.SOAPException;
-
 /**
  * SOAP Client Handler implementation for use with Axis 1.x.
- *
- * @author Adam Rogal
  */
 public class AxisHandler extends SoapClientHandler<Stub> {
 
+  private final EngineConfigurationFactory engineConfigurationFactory;
+  private final RequestInfoXPathSet requestInfoXPathSet;
+  private final ResponseInfoXPathSet responseInfoXPathSet;
+  
+  @Inject
+  public AxisHandler(EngineConfigurationFactory engineConfigurationFactory,
+      RequestInfoXPathSet requestInfoXPathSet,
+      ResponseInfoXPathSet responseInfoXPathSet) {
+    this.engineConfigurationFactory = engineConfigurationFactory;
+    this.requestInfoXPathSet = requestInfoXPathSet;
+    this.responseInfoXPathSet = responseInfoXPathSet;
+  }
+  
   /**
    * Sets the endpoint address of the given SOAP client.
    *
    * @param soapClient the SOAP client to set the endpoint address for
    * @param endpointAddress the target endpoint address
    */
+  @Override
   public void setEndpointAddress(Stub soapClient, String endpointAddress) {
-    soapClient._setProperty("javax.xml.rpc.service.endpoint.address", endpointAddress);
+    soapClient._setProperty(Stub.ENDPOINT_ADDRESS_PROPERTY, endpointAddress);
+  }
+  
+  /**
+   * Sets the read timeout of the given SOAP client.
+   *
+   * @param soapClient the SOAP client to set the read timeout for
+   * @param timeout the timeout in milliseconds
+   */
+  @Override
+  public void setRequestTimeout(Stub soapClient, int timeout) {
+    soapClient.setTimeout(timeout);
   }
 
   /**
@@ -64,6 +88,7 @@ public class AxisHandler extends SoapClientHandler<Stub> {
    * @param headerName the name of the header being looked for
    * @return the header element, if it exists
    */
+  @Override
   public Object getHeader(Stub soapClient, String headerName) {
     SOAPHeaderElement[] soapHeaders = soapClient.getHeaders();
     for (SOAPHeaderElement soapHeader : soapHeaders) {
@@ -79,6 +104,7 @@ public class AxisHandler extends SoapClientHandler<Stub> {
    *
    * @param soapClient the client to remove the headers from
    */
+  @Override
   public void clearHeaders(Stub soapClient) {
     soapClient._setProperty(HTTPConstants.REQUEST_HEADERS, new Hashtable<String, String>());
     soapClient.clearHeaders();
@@ -87,6 +113,7 @@ public class AxisHandler extends SoapClientHandler<Stub> {
   /**
    * @see  SoapClientHandler#setHeader(Object, String, String, Object)
    */
+  @Override
   public void setHeader(Stub soapClient, String namespace, String headerName,
       Object headerValue) {
     try {
@@ -127,7 +154,9 @@ public class AxisHandler extends SoapClientHandler<Stub> {
   /**
    * @see SoapClientHandler#putAllHttpHeaders(Object, Map)
    */
+  @Override
   public void putAllHttpHeaders(Stub soapClient, Map<String, String> headersMap) {
+    @SuppressWarnings("unchecked")
     Hashtable<String, String> headers =
         (Hashtable<String, String>) soapClient._getProperty(HTTPConstants.REQUEST_HEADERS);
     if (headers == null) {
@@ -139,12 +168,11 @@ public class AxisHandler extends SoapClientHandler<Stub> {
 
   /**
    * Set whether SOAP requests should use compression.
-   *
+   * 
    * @param soapClient the client to set compression settings for
    * @param compress whether or not to use compression
    */
-  // TODO(arogal): Add info to README that you need to add the
-  //    client-config.wsdd to the root of the classpath
+  @Override
   public void setCompression(Stub soapClient, boolean compress) {
     soapClient._setProperty(HTTPConstants.MC_ACCEPT_GZIP, compress);
     soapClient._setProperty(HTTPConstants.MC_GZIP_REQUEST, compress);
@@ -157,18 +185,22 @@ public class AxisHandler extends SoapClientHandler<Stub> {
    * @return the SOAP client for this descriptor
    * @throws ServiceException thrown if the SOAP client cannot be created
    */
+  @Override
   public Stub createSoapClient(SoapServiceDescriptor soapServiceDescriptor)
       throws ServiceException {
     try {
       if (soapServiceDescriptor instanceof AxisCompatible) {
         AxisCompatible axisCompatibleService = (AxisCompatible) soapServiceDescriptor;
+        EngineConfiguration engineConfiguration =
+            engineConfigurationFactory.getClientEngineConfig();
         Service locator = (Service) axisCompatibleService.getLocatorClass()
-            .getConstructor(new Class[0]).newInstance(new Object[0]);
+            .getConstructor(new Class[] {EngineConfiguration.class})
+            .newInstance(new Object[] {engineConfiguration});
         return (Stub) locator.getClass().getMethod("getPort", Class.class)
             .invoke(locator, soapServiceDescriptor.getInterfaceClass());
       }
-      throw new ServiceException("Service [" + soapServiceDescriptor +
-          "] not compatible with Axis", null);
+      throw new ServiceException(
+          "Service [" + soapServiceDescriptor + "] not compatible with Axis", null);
     } catch (SecurityException e) {
       throw new ServiceException("Unexpected Exception.", e);
     } catch (NoSuchMethodException e) {
@@ -192,9 +224,10 @@ public class AxisHandler extends SoapClientHandler<Stub> {
    * @param soapCall the call to make to a SOAP web service
    * @return information about the SOAP response
    */
-  public SoapCallReturn invokeSoapCall(SoapCall<Stub> soapCall) {
+  @Override
+  public RemoteCallReturn invokeSoapCall(SoapCall<Stub> soapCall) {
     Stub stub = soapCall.getSoapClient();
-    SoapCallReturn.Builder builder = new SoapCallReturn.Builder();
+    RemoteCallReturn.Builder builder = new RemoteCallReturn.Builder();
     synchronized (stub) {
       Object result = null;
       try {
@@ -205,22 +238,16 @@ public class AxisHandler extends SoapClientHandler<Stub> {
         builder.withException(e);
       } finally {
         MessageContext messageContext = stub._getCall().getMessageContext();
-        try {
-          builder.withRequestInfo(new RequestInfo.Builder().withSoapRequestXml(
-              messageContext.getRequestMessage().getSOAPPartAsString())
-                  .withMethodName(stub._getCall().getOperationName().getLocalPart())
-                  .withServiceName(stub.getPortName().getLocalPart())
-                  .withUrl(stub._getCall().getTargetEndpointAddress())
-                  .build());
-        } catch (AxisFault e) {
-          builder.withException(e);
-        }
-        try {
-          builder.withResponseInfo(new ResponseInfo.Builder().withSoapResponseXml(
-              messageContext.getResponseMessage().getSOAPPartAsString()).build());
-        } catch (AxisFault e) {
-         builder.withException(e);
-        }
+        RequestInfo.Builder requestInfoBuilder = new RequestInfo.Builder()
+                .withMethodName(stub._getCall().getOperationName().getLocalPart())
+                .withServiceName(stub._getService().getServiceName().getLocalPart())
+                .withUrl(stub._getCall().getTargetEndpointAddress());
+        requestInfoXPathSet.parseMessage(requestInfoBuilder, messageContext.getRequestMessage());
+        builder.withRequestInfo(requestInfoBuilder
+                .build());
+        ResponseInfo.Builder responseInfoBuilder = new ResponseInfo.Builder();
+        responseInfoXPathSet.parseMessage(responseInfoBuilder, messageContext.getResponseMessage());
+        builder.withResponseInfo(responseInfoBuilder.build());
       }
 
       return builder.withReturnValue(result).build();
@@ -230,13 +257,15 @@ public class AxisHandler extends SoapClientHandler<Stub> {
   /**
    * @see SoapClientHandlerInterface#getEndpointAddress(Object)
    */
+  @Override
   public String getEndpointAddress(Stub soapClient) {
-    return (String) soapClient._getProperty("javax.xml.rpc.service.endpoint.address");
+    return (String) soapClient._getProperty(Stub.ENDPOINT_ADDRESS_PROPERTY);
   }
 
   /**
    * @see SoapClientHandlerInterface#createSoapHeaderElement(QName)
    */
+  @Override
   public javax.xml.soap.SOAPHeaderElement createSoapHeaderElement(QName qName) {
     return new SOAPHeaderElement(qName);
   }

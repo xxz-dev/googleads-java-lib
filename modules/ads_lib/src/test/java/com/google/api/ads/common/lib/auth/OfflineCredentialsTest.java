@@ -15,10 +15,12 @@
 package com.google.api.ads.common.lib.auth;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
-import static org.junit.Assert.fail;
 import static org.mockito.Mockito.when;
 
+import com.google.api.ads.common.lib.auth.OfflineCredentials.Api;
+import com.google.api.ads.common.lib.auth.OfflineCredentials.Builder;
 import com.google.api.ads.common.lib.auth.OfflineCredentials.ForApiBuilder;
 import com.google.api.ads.common.lib.conf.ConfigurationHelper;
 import com.google.api.ads.common.lib.exception.OAuthException;
@@ -27,22 +29,20 @@ import com.google.api.client.auth.oauth2.ClientParametersAuthentication;
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.http.HttpTransport;
 import com.google.api.client.http.javanet.NetHttpTransport;
-
+import java.io.IOException;
 import org.apache.commons.configuration.PropertiesConfiguration;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
-import java.io.IOException;
-
 /**
  * Tests for {@link OfflineCredentials}.
- *
- * @author Adam Rogal
  */
 @RunWith(JUnit4.class)
 public class OfflineCredentialsTest {
@@ -50,6 +50,8 @@ public class OfflineCredentialsTest {
   @Mock ConfigurationHelper configurationHelper;
   @Mock OAuth2Helper oAuth2Helper;
 
+  @Rule public ExpectedException thrown = ExpectedException.none();
+  
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
@@ -69,12 +71,25 @@ public class OfflineCredentialsTest {
         .withHttpTransport(httpTransport)
         .build();
 
-    assertEquals(offlineCredentials.getClientId(), "clientId");
-    assertEquals(offlineCredentials.getClientSecret(), "clientSecret");
-    assertEquals(offlineCredentials.getRefreshToken(), "refreshToken");
-    assertSame(offlineCredentials.getHttpTransport(), httpTransport);
+    assertEquals("clientId", offlineCredentials.getClientId());
+    assertEquals("clientSecret", offlineCredentials.getClientSecret());
+    assertEquals("refreshToken", offlineCredentials.getRefreshToken());
+    assertSame(httpTransport, offlineCredentials.getHttpTransport());
   }
+  
+  /**
+   * Tests that the builder builds correctly using a service account key file.
+   */
+  @Test
+  public void testBuilder_serviceAccount() throws Exception {
+    OfflineCredentials offlineCredentials = new OfflineCredentials.Builder()
+        .forApi(OfflineCredentials.Api.DFP)
+        .withJsonKeyFilePath("jsonKeyFilePath")
+        .build();
 
+    assertEquals("jsonKeyFilePath", offlineCredentials.getJsonKeyFilePath());
+  }
+  
   /**
    * Tests that the builder correctly reads properties from a configuration.
    */
@@ -84,35 +99,43 @@ public class OfflineCredentialsTest {
     config.setProperty("api.dfp.clientId", "clientId");
     config.setProperty("api.dfp.clientSecret", "clientSecret");
     config.setProperty("api.dfp.refreshToken", "refreshToken");
-
+    
     OfflineCredentials offlineCredentials = new OfflineCredentials.Builder()
         .forApi(OfflineCredentials.Api.DFP)
         .from(config)
         .build();
 
-    assertEquals(offlineCredentials.getClientId(), "clientId");
-    assertEquals(offlineCredentials.getClientSecret(), "clientSecret");
-    assertEquals(offlineCredentials.getRefreshToken(), "refreshToken");
+    assertEquals("clientId", offlineCredentials.getClientId());
+    assertEquals("clientSecret", offlineCredentials.getClientSecret());
+    assertEquals("refreshToken", offlineCredentials.getRefreshToken());
   }
-
+  
   /**
    * Tests that the builder correctly reads properties from a configuration.
    */
   @Test
-  public void testReadPropertiesFromConfiguration_dfa() throws ValidationException {
+  public void testReadPropertiesFromConfiguration_dfpServiceAccount() throws ValidationException {
     PropertiesConfiguration config = new PropertiesConfiguration();
-    config.setProperty("api.dfa.clientId", "clientId");
-    config.setProperty("api.dfa.clientSecret", "clientSecret");
-    config.setProperty("api.dfa.refreshToken", "refreshToken");
-
+    String jsonKeyFilePath = "someJsonKeyFilePath";
+    config.setProperty("api.dfp.jsonKeyFilePath", jsonKeyFilePath);
+    
     OfflineCredentials offlineCredentials = new OfflineCredentials.Builder()
-        .forApi(OfflineCredentials.Api.DFA)
+        .forApi(OfflineCredentials.Api.DFP)
         .from(config)
         .build();
 
-    assertEquals(offlineCredentials.getClientId(), "clientId");
-    assertEquals(offlineCredentials.getClientSecret(), "clientSecret");
-    assertEquals(offlineCredentials.getRefreshToken(), "refreshToken");
+    assertEquals(jsonKeyFilePath, offlineCredentials.getJsonKeyFilePath());
+    assertNull("service account user should be null", offlineCredentials.getServiceAccountUser());
+
+    // Create another credential with the service account user set.
+    String serviceAccountUser = "someUser@example.com";
+    offlineCredentials = new OfflineCredentials.Builder()
+        .forApi(OfflineCredentials.Api.DFP)
+        .from(config)
+        .withServiceAccountUser(serviceAccountUser)
+        .build();
+    assertEquals(jsonKeyFilePath, offlineCredentials.getJsonKeyFilePath());
+    assertEquals(serviceAccountUser, offlineCredentials.getServiceAccountUser());
   }
 
   /**
@@ -130,9 +153,38 @@ public class OfflineCredentialsTest {
         .from(config)
         .build();
 
-    assertEquals(offlineCredentials.getClientId(), "clientId");
-    assertEquals(offlineCredentials.getClientSecret(), "clientSecret");
-    assertEquals(offlineCredentials.getRefreshToken(), "refreshToken");
+    assertEquals("clientId", offlineCredentials.getClientId());
+    assertEquals("clientSecret", offlineCredentials.getClientSecret());
+    assertEquals("refreshToken", offlineCredentials.getRefreshToken());
+  }
+  
+  /**
+   * Tests that the builder correctly reads properties from a configuration.
+   */
+  @Test
+  public void testReadPropertiesFromConfiguration_adWordsServiceAccount() 
+      throws ValidationException {
+    PropertiesConfiguration config = new PropertiesConfiguration();
+    String jsonKeyFilePath = "someJsonKeyFilePath";
+    config.setProperty("api.adwords.jsonKeyFilePath", jsonKeyFilePath);
+    
+    OfflineCredentials offlineCredentials = new OfflineCredentials.Builder()
+        .forApi(OfflineCredentials.Api.ADWORDS)
+        .from(config)
+        .build();
+
+    assertEquals(jsonKeyFilePath, offlineCredentials.getJsonKeyFilePath());
+    assertNull("service account user should be null", offlineCredentials.getServiceAccountUser());
+
+    // Create another credential with the service account user set.
+    String serviceAccountUser = "someUser@example.com";
+    offlineCredentials = new OfflineCredentials.Builder()
+        .forApi(OfflineCredentials.Api.ADWORDS)
+        .from(config)
+        .withServiceAccountUser(serviceAccountUser)
+        .build();
+    assertEquals(jsonKeyFilePath, offlineCredentials.getJsonKeyFilePath());
+    assertEquals(serviceAccountUser, offlineCredentials.getServiceAccountUser());
   }
 
   /**
@@ -153,21 +205,40 @@ public class OfflineCredentialsTest {
         .from(config)
         .build();
 
-    assertEquals(offlineCredentials.getClientId(), "clientIdDfp");
-    assertEquals(offlineCredentials.getClientSecret(), "clientSecretDfp");
-    assertEquals(offlineCredentials.getRefreshToken(), "refreshTokenDfp");
+    assertEquals("clientIdDfp", offlineCredentials.getClientId());
+    assertEquals("clientSecretDfp", offlineCredentials.getClientSecret());
+    assertEquals("refreshTokenDfp", offlineCredentials.getRefreshToken());
+  }
+  
+  /**
+   * Tests that the builder correctly reads properties from a configuration.
+   */
+  @Test
+  public void testReadPropertiesFromConfiguration_properPrefixServiceAccount()
+      throws ValidationException {
+    PropertiesConfiguration config = new PropertiesConfiguration();
+    config.setProperty("api.dfp.jsonKeyFilePath", "jsonKeyFilePathDfp");
+    config.setProperty("api.adwords.jsonKeyFilePath", "jsonKeyFilePathAdWords");
+
+    OfflineCredentials offlineCredentials = new OfflineCredentials.Builder()
+        .forApi(OfflineCredentials.Api.DFP)
+        .from(config)
+        .build();
+
+    assertEquals("jsonKeyFilePathDfp", offlineCredentials.getJsonKeyFilePath());
   }
 
   /**
    * Tests that the builder correctly fails on a bad configuration.
    */
-  @Test(expected = ValidationException.class)
+  @Test
   public void testReadPropertiesFromConfiguration_missingClientId() throws Exception {
     PropertiesConfiguration config = new PropertiesConfiguration();
     config.setProperty("api.dfp.clientSecret", "clientSecret");
     config.setProperty("api.dfp.refreshToken", "refreshToken");
 
-    OfflineCredentials offlineCredentials = new OfflineCredentials.Builder()
+    thrown.expect(ValidationException.class);
+    new OfflineCredentials.Builder()
         .forApi(OfflineCredentials.Api.DFP)
         .from(config)
         .build();
@@ -176,13 +247,14 @@ public class OfflineCredentialsTest {
   /**
    * Tests that the builder correctly fails on a bad configuration.
    */
-  @Test(expected = ValidationException.class)
+  @Test
   public void testReadPropertiesFromConfiguration_missingClientSecret() throws Exception {
     PropertiesConfiguration config = new PropertiesConfiguration();
     config.setProperty("api.dfp.clientId", "clientId");
     config.setProperty("api.dfp.refreshToken", "refreshToken");
 
-    OfflineCredentials offlineCredentials = new OfflineCredentials.Builder()
+    thrown.expect(ValidationException.class);
+    new OfflineCredentials.Builder()
         .forApi(OfflineCredentials.Api.DFP)
         .from(config)
         .build();
@@ -191,13 +263,80 @@ public class OfflineCredentialsTest {
   /**
    * Tests that the builder correctly fails on a bad configuration.
    */
-  @Test(expected = ValidationException.class)
+  @Test
   public void testReadPropertiesFromConfiguration_missingRefreshToken() throws Exception {
     PropertiesConfiguration config = new PropertiesConfiguration();
     config.setProperty("api.dfp.clientId", "clientId");
     config.setProperty("api.dfp.clientSecret", "clientSecret");
 
-    OfflineCredentials offlineCredentials = new OfflineCredentials.Builder()
+    thrown.expect(ValidationException.class);
+    new OfflineCredentials.Builder()
+        .forApi(OfflineCredentials.Api.DFP)
+        .from(config)
+        .build();
+  }
+  
+  /**
+   * Tests that the builder does not fail when missing everything but a service account key.
+   */
+  @Test
+  public void testReadPropertiesFromConfiguration_onlyKeyFilePath() throws Exception {
+    PropertiesConfiguration config = new PropertiesConfiguration();
+    config.setProperty("api.dfp.jsonKeyFilePath", "jsonKeyFilePath");
+
+    new OfflineCredentials.Builder()
+        .forApi(OfflineCredentials.Api.DFP)
+        .from(config)
+        .build();
+  }
+
+  /**
+   * Tests that the builder does not fail when missing everything but a service account key and
+   * service account user.
+   */
+  @Test
+  public void testReadPropertiesFromConfiguration_onlyKeyFilePathAndUser() throws Exception {
+    PropertiesConfiguration config = new PropertiesConfiguration();
+    config.setProperty("api.dfp.jsonKeyFilePath", "jsonKeyFilePath");
+    config.setProperty("api.dfp.serviceAccountUser", "someUser@example.com");
+
+    OfflineCredentials credentials = new Builder().forApi(Api.DFP).from(config).build();
+    assertEquals(
+        "service account user should have been set from the config",
+        "someUser@example.com",
+        credentials.getServiceAccountUser());
+  }
+
+  /**
+   * Tests that the builder correctly fails on a bad configuration.
+   */
+  @Test
+  public void testReadPropertiesFromConfiguration_multipleOAuthTypes() throws Exception {
+    PropertiesConfiguration config = new PropertiesConfiguration();
+    config.setProperty("api.dfp.clientSecret", "clientSecret");
+    config.setProperty("api.dfp.jsonKeyFilePath", "jsonKeyFilePath");
+
+    thrown.expect(ValidationException.class);
+    new OfflineCredentials.Builder()
+        .forApi(OfflineCredentials.Api.DFP)
+        .from(config)
+        .build();
+  }
+
+  /**
+   * Tests that the builder correctly fails on a bad configuration that has serviceAccountUser
+   * specified but does not have the jsonKeyFilePath.
+   */
+  @Test
+  public void testReadPropertiesFromConfiguration_serviceAccountUserNoKeyFile() throws Exception {
+    PropertiesConfiguration config = new PropertiesConfiguration();
+    config.setProperty("api.dfp.clientId", "clientId");
+    config.setProperty("api.dfp.clientSecret", "clientSecret");
+    config.setProperty("api.dfp.refreshToken", "refreshToken");
+    config.setProperty("api.dfp.serviceAccountUser", "someUser@example.com");
+
+    thrown.expect(ValidationException.class);
+    new OfflineCredentials.Builder()
         .forApi(OfflineCredentials.Api.DFP)
         .from(config)
         .build();
@@ -220,9 +359,9 @@ public class OfflineCredentialsTest {
 
     OfflineCredentials offlineCredentials = builder.fromFile("path").build();
 
-    assertEquals(offlineCredentials.getClientId(), "clientId");
-    assertEquals(offlineCredentials.getClientSecret(), "clientSecret");
-    assertEquals(offlineCredentials.getRefreshToken(), "refreshToken");
+    assertEquals("clientId", offlineCredentials.getClientId());
+    assertEquals("clientSecret", offlineCredentials.getClientSecret());
+    assertEquals("refreshToken", offlineCredentials.getRefreshToken());
   }
 
   /**
@@ -243,9 +382,9 @@ public class OfflineCredentialsTest {
     OfflineCredentials offlineCredentials =
         builder.fromFile("path").withRefreshToken("overrideRefreshToken").build();
 
-    assertEquals(offlineCredentials.getClientId(), "clientId");
-    assertEquals(offlineCredentials.getClientSecret(), "clientSecret");
-    assertEquals(offlineCredentials.getRefreshToken(), "overrideRefreshToken");
+    assertEquals("clientId", offlineCredentials.getClientId());
+    assertEquals("clientSecret", offlineCredentials.getClientSecret());
+    assertEquals("overrideRefreshToken", offlineCredentials.getRefreshToken());
   }
 
   /**
@@ -262,14 +401,11 @@ public class OfflineCredentialsTest {
     ForApiBuilder builder = new OfflineCredentials.ForApiBuilder(
         configurationHelper, OfflineCredentials.Api.DFP, oAuth2Helper);
 
-    try {
-      OfflineCredentials offlineCredentials = builder.fromFile("/home/user/path").build();
-      fail("Validation exception should have been thrown");
-    } catch (ValidationException e) {
-      assertEquals("A refresh token must be set as api.dfp.refreshToken in /home/user/path."
-          + "\nIt is required for offline credentials. If you need to create one, "
-          + "see the GetRefreshToken example.", e.getMessage());
-    }
+    thrown.expect(ValidationException.class);
+    thrown.expectMessage("A refresh token must be set as api.dfp.refreshToken in /home/user/path."
+        + "\nIt is required for offline credentials. If you need to create one, "
+        + "see the GetRefreshToken example.");
+    builder.fromFile("/home/user/path").build();
   }
 
   /**
@@ -284,14 +420,11 @@ public class OfflineCredentialsTest {
     ForApiBuilder builder = new OfflineCredentials.ForApiBuilder(
         configurationHelper, OfflineCredentials.Api.DFP, oAuth2Helper);
 
-    try {
-      OfflineCredentials offlineCredentials = builder.from(config).build();
-      fail("Validation exception should have been thrown");
-    } catch (ValidationException e) {
-      assertEquals("A refresh token must be set."
-          + "\nIt is required for offline credentials. If you need to create one, "
-          + "see the GetRefreshToken example.", e.getMessage());
-    }
+    thrown.expect(ValidationException.class);
+    thrown.expectMessage("A refresh token must be set."
+        + "\nIt is required for offline credentials. If you need to create one, "
+        + "see the GetRefreshToken example.");
+    builder.from(config).build();
   }
 
   /**
@@ -308,14 +441,11 @@ public class OfflineCredentialsTest {
     ForApiBuilder builder = new OfflineCredentials.ForApiBuilder(
         configurationHelper, OfflineCredentials.Api.DFP, oAuth2Helper);
 
-    try {
-      OfflineCredentials offlineCredentials = builder.fromFile("/home/user/path").build();
-      fail("Validation exception should have been thrown");
-    } catch (ValidationException e) {
-      assertEquals("Client ID must be set as api.dfp.clientId in /home/user/path."
-          + "\nIf you do not have a client ID or secret, please create one in the API "
-          + "console: https://code.google.com/apis/console#access", e.getMessage());
-    }
+    thrown.expect(ValidationException.class);
+    thrown.expectMessage("Client ID must be set as api.dfp.clientId in /home/user/path."
+        + "\nIf you do not have a client ID or secret, please create one in the API "
+        + "console: https://console.developers.google.com/project");
+    builder.fromFile("/home/user/path").build();
   }
 
   /**
@@ -330,14 +460,11 @@ public class OfflineCredentialsTest {
     ForApiBuilder builder = new OfflineCredentials.ForApiBuilder(
         configurationHelper, OfflineCredentials.Api.DFP, oAuth2Helper);
 
-    try {
-      OfflineCredentials offlineCredentials = builder.from(config).build();
-      fail("Validation exception should have been thrown");
-    } catch (ValidationException e) {
-      assertEquals("Client ID must be set."
-          + "\nIf you do not have a client ID or secret, please create one in the API "
-          + "console: https://code.google.com/apis/console#access", e.getMessage());
-    }
+    thrown.expect(ValidationException.class);
+    thrown.expectMessage("Client ID must be set."
+        + "\nIf you do not have a client ID or secret, please create one in the API "
+        + "console: https://console.developers.google.com/project");
+    builder.from(config).build();
   }
 
   /**
@@ -354,14 +481,11 @@ public class OfflineCredentialsTest {
     ForApiBuilder builder = new OfflineCredentials.ForApiBuilder(
         configurationHelper, OfflineCredentials.Api.DFP, oAuth2Helper);
 
-    try {
-      OfflineCredentials offlineCredentials = builder.fromFile("/home/user/path").build();
-      fail("Validation exception should have been thrown");
-    } catch (ValidationException e) {
-      assertEquals("Client secret must be set as api.dfp.clientSecret in /home/user/path."
-          + "\nIf you do not have a client ID or secret, please create one in the API "
-          + "console: https://code.google.com/apis/console#access", e.getMessage());
-    }
+    thrown.expect(ValidationException.class);
+    thrown.expectMessage("Client secret must be set as api.dfp.clientSecret in /home/user/path."
+        + "\nIf you do not have a client ID or secret, please create one in the API "
+        + "console: https://console.developers.google.com/project");
+    builder.fromFile("/home/user/path").build();
   }
 
   /**
@@ -376,14 +500,11 @@ public class OfflineCredentialsTest {
     ForApiBuilder builder = new OfflineCredentials.ForApiBuilder(
         configurationHelper, OfflineCredentials.Api.DFP, oAuth2Helper);
 
-    try {
-      OfflineCredentials offlineCredentials = builder.from(config).build();
-      fail("Validation exception should have been thrown");
-    } catch (ValidationException e) {
-      assertEquals("Client secret must be set."
-          + "\nIf you do not have a client ID or secret, please create one in the API "
-          + "console: https://code.google.com/apis/console#access", e.getMessage());
-    }
+    thrown.expect(ValidationException.class);
+    thrown.expectMessage("Client secret must be set."
+        + "\nIf you do not have a client ID or secret, please create one in the API "
+        + "console: https://console.developers.google.com/project");
+    builder.from(config).build();
   }
 
   /**
@@ -405,13 +526,13 @@ public class OfflineCredentialsTest {
     Credential credential = offlineCredentials.generateCredential();
 
     assertEquals(
-        ((ClientParametersAuthentication) credential.getClientAuthentication()).getClientId(),
-        "clientId");
+        "clientId",
+        ((ClientParametersAuthentication) credential.getClientAuthentication()).getClientId());
     assertEquals(
-        ((ClientParametersAuthentication) credential.getClientAuthentication()).getClientSecret(),
-        "clientSecret");
-    assertEquals(credential.getRefreshToken(), "refreshToken");
-    assertSame(credential.getTransport(), httpTransport);
+        "clientSecret",
+        ((ClientParametersAuthentication) credential.getClientAuthentication()).getClientSecret());
+    assertEquals("refreshToken", credential.getRefreshToken());
+    assertSame(httpTransport, credential.getTransport());
   }
 
   /**
@@ -430,19 +551,19 @@ public class OfflineCredentialsTest {
     Credential credential = offlineCredentials.generateCredential();
 
     assertEquals(
-        ((ClientParametersAuthentication) credential.getClientAuthentication()).getClientId(),
-        "clientId");
+        "clientId",
+        ((ClientParametersAuthentication) credential.getClientAuthentication()).getClientId());
     assertEquals(
-        ((ClientParametersAuthentication) credential.getClientAuthentication()).getClientSecret(),
-        "clientSecret");
-    assertEquals(credential.getRefreshToken(), "refreshToken");
-    assertSame(credential.getTransport(), ForApiBuilder.DEFAULT_HTTP_TRANSPORT);
+        "clientSecret",
+        ((ClientParametersAuthentication) credential.getClientAuthentication()).getClientSecret());
+    assertEquals("refreshToken", credential.getRefreshToken());
+    assertSame(ForApiBuilder.DEFAULT_HTTP_TRANSPORT, credential.getTransport());
   }
 
   /**
    * Tests generating OAuth2 credentials.
    */
-  @Test(expected = OAuthException.class)
+  @Test
   public void testGenerateCredential_IOException() throws Exception {
     OfflineCredentials offlineCredentials = new OfflineCredentials.Builder(oAuth2Helper)
         .forApi(OfflineCredentials.Api.DFP)
@@ -453,13 +574,14 @@ public class OfflineCredentialsTest {
     when(oAuth2Helper.callRefreshToken(Mockito.<Credential>anyObject()))
         .thenThrow(new IOException());
 
-    Credential credential = offlineCredentials.generateCredential();
+    thrown.expect(OAuthException.class);
+    offlineCredentials.generateCredential();
   }
-
+ 
   /**
    * Tests generating OAuth2 credentials.
    */
-  @Test(expected = OAuthException.class)
+  @Test
   public void testGenerateCredential_cantRefresh() throws Exception {
     OfflineCredentials offlineCredentials = new OfflineCredentials.Builder(oAuth2Helper)
         .forApi(OfflineCredentials.Api.DFP)
@@ -468,7 +590,8 @@ public class OfflineCredentialsTest {
         .build();
 
     when(oAuth2Helper.callRefreshToken(Mockito.<Credential>anyObject())).thenReturn(false);
-
-    Credential credential = offlineCredentials.generateCredential();
+    
+    thrown.expect(OAuthException.class);
+    offlineCredentials.generateCredential();
   }
 }
